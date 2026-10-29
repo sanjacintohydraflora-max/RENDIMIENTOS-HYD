@@ -22,10 +22,10 @@ const Calc = (() => {
   const CONFIG_BASE = {
     desayunoHora: '08:30', desayunoMin: 26,
     almuerzoHora: '12:00', almuerzoMin: 25,
-    pausaHora: '10:00', pausaMin: 0,
-    jornada: 8.4,
+    pausaHora: '10:00', pausaMin: 10,
+    jornada: 8.23,
     jornadaInicio: '06:15', jornadaFin: '15:30',
-    jornadaSabado: 8.4, pausaDiasMin: 10,
+    jornadaSabado: 8.23, pausaDiasMin: 10,
   };
 
   const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();

@@ -27,7 +27,15 @@
   }
 
   async function cargarCatalogos() {
-    S.cfg = { ...Calc.CONFIG_BASE, ...(await DB.getMeta('config', {})) };
+    const guardada = await DB.getMeta('config', {});
+    // Los días ordinarios llevan pausa de 10 min: los horarios guardados antes sin pausa pasan a 10 min y 8,23 h.
+    if (guardada.pausaMin === 0 && !guardada.pausa10) {
+      Object.assign(guardada, { pausaMin: 10, pausa10: true });
+      if (guardada.jornada === 8.4) guardada.jornada = 8.23;
+      if (guardada.jornadaSabado === 8.4) guardada.jornadaSabado = 8.23;
+      await DB.setMeta('config', guardada);
+    }
+    S.cfg = { ...Calc.CONFIG_BASE, ...guardada };
     S.labores = await DB.getMeta('labores', []);
     if (!S.labores.length) {
       S.labores = (await cargarJSON('data/labores.json')) || [];
@@ -796,9 +804,9 @@
         desayunoHora: $('cDesH').value || '08:30', desayunoMin: Number($('cDesM').value) || 0,
         almuerzoHora: $('cAlmH').value || '12:00', almuerzoMin: Number($('cAlmM').value) || 0,
         pausaHora: $('cPauH').value || '10:00', pausaMin: Number($('cPauM').value) || 0,
-        pausaDiasMin: Number($('cPauDiasM').value) || 0,
-        jornada: Number($('cJornada').value) || 8.4,
-        jornadaSabado: $('cJornadaSab').value === '' ? Number($('cJornada').value) || 8.4 : Number($('cJornadaSab').value),
+        pausaDiasMin: Number($('cPauDiasM').value) || 0, pausa10: true,
+        jornada: Number($('cJornada').value) || 8.23,
+        jornadaSabado: $('cJornadaSab').value === '' ? Number($('cJornada').value) || 8.23 : Number($('cJornadaSab').value),
         jornadaInicio: $('cJorIni').value || '06:15', jornadaFin: $('cJorFin').value || '15:30',
       };
       await DB.setMeta('config', S.cfg);
