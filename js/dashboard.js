@@ -21,6 +21,50 @@ const Dashboard = (() => {
     return [fechaStr(d), h];
   }
 
+  // ---------- Filtro por año, mes y semana (ISO, como la columna SEM) ----------
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const utc = s => { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+  const isoStr = d => d.toISOString().slice(0, 10);
+  const masDias = (s, n) => { const d = utc(s); d.setUTCDate(d.getUTCDate() + n); return isoStr(d); };
+  function lunesSemana1(y) { const d = new Date(Date.UTC(y, 0, 4)); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return isoStr(d); }
+  const semanasDelAnio = y => Calc.semanaISO(`${y}-12-28`);
+  const diaCorto = s => `${+s.slice(8)} ${MESES[+s.slice(5, 7) - 1].slice(0, 3).toLowerCase()}`;
+
+  function pintarSemanas() {
+    const y = +$('fAnio').value, m = $('fMes').value, cur = $('fSemana').value;
+    let ops = [];
+    if (y) {
+      const l1 = lunesSemana1(y);
+      for (let w = 1; w <= semanasDelAnio(y); w++) {
+        const ini = masDias(l1, 7 * (w - 1)), fin = masDias(ini, 6);
+        const mesIni = `${y}-${m.padStart(2, '0')}-01`, mesFin = isoStr(new Date(Date.UTC(y, +m, 0)));
+        if (m && (fin < mesIni || ini > mesFin)) continue;
+        ops.push([String(w), `Sem ${w} · ${diaCorto(ini)} a ${diaCorto(fin)}`]);
+      }
+    }
+    opciones($('fSemana'), ops, 'Todas');
+    if (!ops.some(([v]) => v === cur)) $('fSemana').value = '';
+  }
+
+  function pintarPeriodo() {
+    const y = new Date().getFullYear();
+    opciones($('fAnio'), [y + 1, y, y - 1, y - 2, y - 3].map(a => [String(a), String(a)]), 'Elegir');
+    opciones($('fMes'), MESES.map((n, i) => [String(i + 1), n]), 'Todos');
+    pintarSemanas();
+  }
+
+  // Convierte la selección de año, mes y semana en el rango Desde–Hasta.
+  function rangoPeriodo() {
+    if (!$('fAnio').value && ($('fMes').value || $('fSemana').value)) $('fAnio').value = String(new Date().getFullYear());
+    const y = +$('fAnio').value, m = +$('fMes').value, w = +$('fSemana').value;
+    if (!y) return null;
+    if (w) { const ini = masDias(lunesSemana1(y), 7 * (w - 1)); return [ini, masDias(ini, 6)]; }
+    if (m) return [`${y}-${String(m).padStart(2, '0')}-01`, isoStr(new Date(Date.UTC(y, m, 0)))];
+    return [`${y}-01-01`, `${y}-12-31`];
+  }
+
+  const limpiarPeriodo = () => { $('fAnio').value = ''; $('fMes').value = ''; pintarSemanas(); };
+
   async function filasCombinadas() {
     const locales = await ctx.filasLocales();
     const borrados = new Set(await DB.getMeta('borrados', []));
@@ -314,9 +358,20 @@ const Dashboard = (() => {
       if (!b) return;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.toggle('on', x === b));
       [$('fDesde').value, $('fHasta').value] = rango(b.dataset.r);
+      limpiarPeriodo();
       await traerServidor(); render();
     });
     ['fDesde', 'fHasta'].forEach(id => $(id).addEventListener('change', async () => {
+      document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
+      limpiarPeriodo();
+      await traerServidor(); render();
+    }));
+    ['fAnio', 'fMes', 'fSemana'].forEach(id => $(id).addEventListener('change', async () => {
+      if (id !== 'fSemana') pintarSemanas();
+      const r = rangoPeriodo();
+      if (!r) return;
+      if (id !== 'fSemana') pintarSemanas();
+      [$('fDesde').value, $('fHasta').value] = r;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
       await traerServidor(); render();
     }));
@@ -335,6 +390,7 @@ const Dashboard = (() => {
     ctx = c;
     if (!enlazado) {
       enlazar();
+      pintarPeriodo();
       [$('fDesde').value, $('fHasta').value] = rango('sem');
     }
     await render();
