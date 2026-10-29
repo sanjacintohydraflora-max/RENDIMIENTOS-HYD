@@ -243,8 +243,20 @@
       <div class="field"><label class="f" for="cKey">Clave</label><input type="password" id="cKey"></div>
       <div class="btn-row">
         <button type="button" class="btn primary" id="saveSync">Guardar y probar</button>
+        <button type="button" class="btn" id="shareSync">Compartir conexión</button>
       </div>
       <p class="hint" id="syncInfo"></p>
+      <div id="shareBox" class="hidden" style="margin-top:12px">
+        <p class="sub">Pídele a la otra persona que escanee este código con la cámara del celular, o mándale el enlace. Al abrirlo, su app queda conectada.</p>
+        <div id="shareQr" style="background:#fff;padding:12px;border-radius:12px;width:max-content;max-width:100%;margin:0 auto 12px"></div>
+        <div class="field"><input type="text" id="shareLink" readonly></div>
+        <div class="btn-row">
+          <button type="button" class="btn small" id="shareCopy">Copiar enlace</button>
+          <button type="button" class="btn small" id="shareSend">Enviar…</button>
+          <button type="button" class="btn small" id="shareHide">Ocultar</button>
+        </div>
+        <p class="hint">Este enlace lleva la clave: compártelo solo con líderes de campo y con quien vea el dashboard. Si cambias la clave, el enlace viejo deja de funcionar.</p>
+      </div>
     </div>
     <div class="card">
       <h2>Datos en este celular</h2>
@@ -259,6 +271,7 @@
   <div id="tip" class="tip hidden"></div>
 
   <script src="vendor/xlsx.full.min.js" defer></script>
+  <script src="vendor/qrcode.js" defer></script>
   <script src="js/db.js" defer></script>
   <script src="js/calc.js" defer></script>
   <script src="js/sync.js" defer></script>

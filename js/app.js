@@ -596,6 +596,46 @@
     XLSX.writeFile(wb, nombre);
   }
 
+  // ---------- Compartir la conexión ----------
+  // El enlace lleva la URL y la clave después del #, que el navegador nunca envía a GitHub.
+  const codificar = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+  const decodificar = t => JSON.parse(decodeURIComponent(escape(atob(t))));
+
+  async function enlaceConexion() {
+    const s = await DB.getMeta('sync', { url: '', key: '' });
+    if (!s.url) return null;
+    return `${location.origin}${location.pathname}#conectar=${encodeURIComponent(codificar({ u: s.url, k: s.key }))}`;
+  }
+
+  async function mostrarCompartir() {
+    const link = await enlaceConexion();
+    if (!link) { toast('Primero conecta este equipo al servidor (Guardar y probar).'); return; }
+    const qr = qrcode(0, 'M');
+    qr.addData(link);
+    qr.make();
+    $('shareQr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    const svg = $('shareQr').querySelector('svg');
+    if (svg) { svg.style.width = '240px'; svg.style.maxWidth = '100%'; svg.style.height = 'auto'; svg.style.display = 'block'; }
+    $('shareLink').value = link;
+    $('shareSend').classList.toggle('hidden', !navigator.share);
+    $('shareBox').classList.remove('hidden');
+  }
+
+  async function conectarDesdeEnlace() {
+    const m = location.hash.match(/^#conectar=(.+)$/);
+    if (!m) return false;
+    history.replaceState(null, '', location.pathname);
+    let datos;
+    try { datos = decodificar(decodeURIComponent(m[1])); } catch { toast('El enlace de conexión está incompleto. Pide uno nuevo.', 5000); return false; }
+    if (!datos?.u) return false;
+    if (!confirm('¿Conectar este celular al servidor de rendimientos Hydraflora?')) return false;
+    await DB.setMeta('sync', { url: datos.u, key: datos.k || '' });
+    const r = await Sync.sincronizar();
+    await cargarCatalogos();
+    toast(r?.error ? `No se pudo conectar: ${r.error}` : 'Celular conectado. Ya bajaron empleados, labores y plano.', 5000);
+    return true;
+  }
+
   // ---------- Navegación ----------
   function mostrar(vista) {
     document.querySelectorAll('main[id^="view-"]').forEach(m => m.classList.toggle('hidden', m.id !== `view-${vista}`));
@@ -716,6 +756,13 @@
       await cargarCatalogos();
       pintarAjustes();
     });
+    $('shareSync').addEventListener('click', mostrarCompartir);
+    $('shareHide').addEventListener('click', () => $('shareBox').classList.add('hidden'));
+    $('shareCopy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('shareLink').value); toast('Enlace copiado'); }
+      catch { $('shareLink').select(); document.execCommand('copy'); toast('Enlace copiado'); }
+    });
+    $('shareSend').addEventListener('click', () => navigator.share({ title: 'Rendimientos Hydraflora', text: 'Abre este enlace para conectar la app de rendimientos:', url: $('shareLink').value }).catch(() => {}));
     $('exportLocal').addEventListener('click', async () => descargarExcel(await filasLocales(), `rendimientos-celular-${hoyStr()}.xlsx`));
 
     Sync.onCambio(st => { actualizarSyncPill(st); if (st.tipo !== 'sincronizando') cargarCatalogos(); });
@@ -734,8 +781,9 @@
     let vista = 'registrar';
     try { vista = localStorage.getItem('vista') || vista; } catch { /* sin almacenamiento */ }
     if (location.hash === '#dashboard') vista = 'dashboard';
-    mostrar(vista);
-    Sync.sincronizar();
+    const conectado = await conectarDesdeEnlace();
+    mostrar(conectado ? 'registrar' : vista);
+    if (!conectado) Sync.sincronizar();
   }
 
   document.addEventListener('DOMContentLoaded', iniciar);
