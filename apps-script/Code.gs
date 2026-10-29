@@ -14,7 +14,7 @@
  * hacer tablas dinámicas o descargarla a Excel cuando quieras.
  */
 
-const CLAVE_INICIAL = 'Hydraflora';
+const CLAVE_INICIAL = 'cambia-esta-clave';
 
 const HOJAS = {
   RENDIMIENTOS: [
@@ -125,7 +125,8 @@ function guardar(registros, borrados) {
   const nuevas = [];
   registros.forEach(r => (r.filas || []).forEach(f => {
     nuevas.push(enc.map(c => {
-      const v = f[c];
+      // Celulares con la versión anterior mandan la columna como LUGARDE TRABAJO.
+      const v = c === 'LUGAR DE TRABAJO' && f[c] === undefined ? f['LUGARDE TRABAJO'] : f[c];
       if (c === 'FECHA' && v) { const p = String(v).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
       return v === undefined || v === null ? '' : v;
     }));

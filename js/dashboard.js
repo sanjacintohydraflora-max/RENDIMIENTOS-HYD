@@ -48,10 +48,12 @@ const Dashboard = (() => {
 
   function filtrar(filas) {
     const d = $('fDesde').value, h = $('fHasta').value, l = $('fLabor').value, p = $('fPersona').value, b = $('fBloque').value, g = $('fLugar').value;
-    return filas.filter(f => (!d || f.FECHA >= d) && (!h || f.FECHA <= h) && (!l || f.LABOR === l) && (!p || String(f.CEDULA) === p) && (!b || f.BLOQUE === b) && (!g || f['LUGARDE TRABAJO'] === g));
+    return filas.filter(f => (!d || f.FECHA >= d) && (!h || f.FECHA <= h) && (!l || f.LABOR === l) && (!p || String(f.CEDULA) === p) && (!b || f.BLOQUE === b) && (!g || lugar(f) === g));
   }
 
   const tipo = f => Calc.tipoMedida(f.MEDIDA);
+  // La columna se llamó LUGARDE TRABAJO en la primera versión de la hoja.
+  const lugar = f => f['LUGAR DE TRABAJO'] ?? f['LUGARDE TRABAJO'] ?? '';
   const unidad = t => (t === 'tallos' ? 'tallos/h' : 'plantas/h');
 
   function opciones(sel, valores, todos) {
@@ -281,7 +283,7 @@ const Dashboard = (() => {
     const pers = new Map(todas.map(f => [String(f.CEDULA), f.NOMBRE]));
     opciones($('fPersona'), [...pers].sort((a, b) => a[1].localeCompare(b[1])), 'Todas');
     opciones($('fBloque'), [...new Set(todas.map(f => f.BLOQUE).filter(Boolean))].sort(numSort).map(b => [b, b]), 'Todos');
-    opciones($('fLugar'), [...new Set(todas.map(f => f['LUGARDE TRABAJO']).filter(Boolean))].sort().map(b => [b, b]), 'Todos');
+    opciones($('fLugar'), [...new Set(todas.map(lugar).filter(Boolean))].sort().map(b => [b, b]), 'Todos');
     const filas = filtrar(todas);
     ultimas = filas;
     kpis(filas); promMax(filas); horasLabor(filas); porPersona(filas); tendencia(filas); revision(filas); bloques(filas);

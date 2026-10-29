@@ -6,7 +6,7 @@
 // bloques/lotes ("tramos"), cada tramo es una fila y el tiempo se reparte según sus plantas.
 const Calc = (() => {
   const COLUMNAS = [
-    'AÑO', 'MES', 'SEM', 'FECHA', 'LUGARDE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
+    'AÑO', 'MES', 'SEM', 'FECHA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
     'HRA INICIO', 'HRA FIN', 'HORAS TOTALES', 'DESAYUNO', 'PAUSAS', 'ALMUERZO', 'TIEMPO LAB',
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
     'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO',
@@ -119,7 +119,7 @@ const Calc = (() => {
       const w = peso(t);
       return {
         'AÑO': y, 'MES': m, 'SEM': reg.fecha ? semanaISO(reg.fecha) : '', 'FECHA': reg.fecha,
-        'LUGARDE TRABAJO': e.lugar || '', 'ESTADO': e.estado || '', 'NOMBRE': e.nombre, 'CEDULA': String(ced),
+        'LUGAR DE TRABAJO': e.lugar || '', 'ESTADO': e.estado || '', 'NOMBRE': e.nombre, 'CEDULA': String(ced),
         'LABOR': reg.labor, 'HRA INICIO': reg.horaInicio, 'HRA FIN': reg.horaFin,
         'HORAS TOTALES': r2(horasTotales * w), 'DESAYUNO': r2(desayuno * w), 'PAUSAS': r2(pausa * w), 'ALMUERZO': r2(almuerzo * w),
         'TIEMPO LAB': r2(tiempoLab * w), 'CANTIDAD': r2(porPersona * w), 'RENDIMIENTO': r2(rendimiento),
