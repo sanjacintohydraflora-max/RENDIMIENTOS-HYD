@@ -16,10 +16,19 @@ const Sync = (() => {
     const opts = body
       ? { method: 'POST', body: JSON.stringify({ ...body, key }), headers: { 'Content-Type': 'text/plain;charset=utf-8' } }
       : { method: 'GET' };
-    const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${qs}`, { ...opts, redirect: 'follow' });
-    if (!res.ok) throw new Error(`El servidor respondió ${res.status}`);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Error del servidor');
+    if (!/\/exec(\?|$)/.test(url)) throw new Error('La URL debe terminar en /exec (la de "Implementar > Gestionar implementaciones").');
+    let res;
+    try {
+      res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${qs}`, { ...opts, redirect: 'follow' });
+    } catch {
+      throw new Error('el servidor no respondió. Revisa la URL y que la implementación tenga acceso "Cualquier persona" y se ejecute como "Yo".');
+    }
+    if (!res.ok) throw new Error(`el servidor respondió ${res.status}. Revisa que la implementación tenga acceso "Cualquier persona".`);
+    let data;
+    try { data = await res.json(); } catch {
+      throw new Error('la URL abrió una página de Google en vez del script. Revisa que el acceso sea "Cualquier persona".');
+    }
+    if (!data.ok) throw new Error(data.error === 'Clave incorrecta' ? 'clave incorrecta. Si ejecutaste configurar antes de cambiar la clave, prueba con cambia-esta-clave.' : data.error || 'error del servidor');
     return data;
   }
 
