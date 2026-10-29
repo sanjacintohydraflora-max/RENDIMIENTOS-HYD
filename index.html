@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2f6b3a">
+  <title>Rendimientos Hydraflora</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Rendimientos Hydraflora</h1>
+    <button id="syncPill" class="sync-pill" type="button" title="Sincronizar ahora">
+      <span class="dot"></span><span id="syncText">Sin conexión</span>
+    </button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" data-view="registrar" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Registrar
+    </button>
+    <button type="button" data-view="hoy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Registros
+    </button>
+    <button type="button" data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Dashboard
+    </button>
+    <button type="button" data-view="ajustes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes
+    </button>
+  </nav>
+
+  <!-- REGISTRAR -->
+  <main id="view-registrar">
+    <form id="form" autocomplete="off" novalidate>
+      <div class="card">
+        <div id="editBanner" class="hidden" style="margin-bottom:12px">
+          <span class="badge gr">Editando registro</span>
+          <button type="button" class="btn small" id="cancelEdit" style="margin-left:8px">Cancelar edición</button>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="f req" for="fecha">Fecha</label>
+            <input type="date" id="fecha" required>
+          </div>
+          <div class="field">
+            <label class="f" for="lider">Líder de campo</label>
+            <input type="text" id="lider" placeholder="Tu nombre">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="f req" for="laborInput">Labor</label>
+          <input type="text" id="laborInput" placeholder="Escribe parte de la labor, ej. desma">
+          <div class="suggest hidden" id="laborSuggest"></div>
+          <div id="laborInfo" class="hint"></div>
+        </div>
+
+        <div class="field">
+          <label class="f req" for="empInput">Empleado(s)</label>
+          <input type="text" id="empInput" placeholder="Nombre, apellido o cédula">
+          <div class="suggest hidden" id="empSuggest"></div>
+          <div class="chips" id="empChips"></div>
+          <div class="hint" id="empHint">Si la labor es grupal, agrega a todas las personas que participaron.</div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label class="f req" for="hInicio">Hora inicio</label>
+            <div class="time-wrap"><input type="time" id="hInicio" required><button type="button" class="btn" data-now="hInicio">Ahora</button></div>
+          </div>
+          <div class="field">
+            <label class="f req" for="hFin">Hora fin</label>
+            <div class="time-wrap"><input type="time" id="hFin" required><button type="button" class="btn" data-now="hFin">Ahora</button></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="f">Descuentos de tiempo</label>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="dDesayuno"> Desayuno <span class="hint" id="dDesayunoMin"></span></label>
+            <label class="check"><input type="checkbox" id="dAlmuerzo"> Almuerzo <span class="hint" id="dAlmuerzoMin"></span></label>
+            <label class="check"><input type="checkbox" id="dPausa"> Pausa <span class="hint" id="dPausaMin"></span></label>
+          </div>
+          <div class="hint">Se marcan solos cuando el horario cruza la hora del desayuno o almuerzo.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="field">
+            <label class="f" for="bloque" id="bloqueLbl">Bloque</label>
+            <select id="bloque"><option value="">—</option></select>
+          </div>
+          <div class="field">
+            <label class="f" for="lote" id="loteLbl">Lote</label>
+            <select id="lote"><option value="">—</option></select>
+          </div>
+        </div>
+        <div class="field" id="camasField">
+          <label class="f" id="camasLbl">Camas realizadas</label>
+          <div class="camas-tools">
+            <input type="text" id="camasText" placeholder="Ej: 1-10, 15, 18" inputmode="numeric">
+            <button type="button" class="btn small" id="camasAll">Todo el lote</button>
+            <button type="button" class="btn small" id="camasNone">Limpiar</button>
+          </div>
+          <div class="camas-grid" id="camasGrid"></div>
+          <div class="hint" id="camasHint">Elige bloque y lote para ver las camas.</div>
+        </div>
+        <div class="row">
+          <div class="field" id="cantField">
+            <label class="f" for="cantidad" id="cantLbl">Plantas</label>
+            <input type="number" id="cantidad" min="0" step="1" inputmode="numeric">
+            <div class="hint" id="cantHint"></div>
+          </div>
+          <div class="field">
+            <label class="f" for="obs">Observaciones</label>
+            <input type="text" id="obs" placeholder="Opcional">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Resultado</h2>
+        <div class="calc" id="calc"><div class="empty" style="padding:8px">Completa la labor, las personas y el horario.</div></div>
+        <div id="formErr" class="err"></div>
+        <div style="margin-top:14px">
+          <button type="submit" class="btn primary block" id="saveBtn">Guardar registro</button>
+        </div>
+      </div>
+    </form>
+  </main>
+
+  <!-- REGISTROS DEL DÍA -->
+  <main id="view-hoy" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div class="field" style="margin:0">
+          <label class="f" for="hoyFecha">Día</label>
+          <input type="date" id="hoyFecha">
+        </div>
+        <div class="field" style="margin:0;display:flex;align-items:flex-end">
+          <button type="button" class="btn block" id="hoySync">Sincronizar ahora</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Horas por persona</h2>
+      <div id="hoyHoras"></div>
+    </div>
+    <div class="card">
+      <h2>Registros</h2>
+      <div id="hoyLista"></div>
+    </div>
+  </main>
+
+  <!-- DASHBOARD -->
+  <main id="view-dashboard" class="hidden wide">
+    <div class="card">
+      <div class="filters">
+        <div class="field"><label class="f" for="fDesde">Desde</label><input type="date" id="fDesde"></div>
+        <div class="field"><label class="f" for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
+        <div class="field"><label class="f" for="fLabor">Labor</label><select id="fLabor"><option value="">Todas</option></select></div>
+        <div class="field"><label class="f" for="fPersona">Persona</label><select id="fPersona"><option value="">Todas</option></select></div>
+        <div class="field"><label class="f" for="fBloque">Bloque</label><select id="fBloque"><option value="">Todos</option></select></div>
+        <div class="field"><label class="f" for="fLugar">Lugar</label><select id="fLugar"><option value="">Todos</option></select></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px;align-items:center">
+        <div class="seg" id="rangeSeg">
+          <button type="button" data-r="7">7 días</button>
+          <button type="button" data-r="sem" class="on">Esta semana</button>
+          <button type="button" data-r="30">30 días</button>
+          <button type="button" data-r="mes">Este mes</button>
+        </div>
+        <button type="button" class="btn small" id="dashRefresh">Actualizar del servidor</button>
+        <button type="button" class="btn small" id="dashExport">Descargar Excel</button>
+        <span class="hint" id="dashSource"></span>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="dash-grid">
+      <div class="card span2" id="cPromMax"></div>
+      <div class="card" id="cHorasLabor"></div>
+      <div class="card" id="cPersona"></div>
+      <div class="card span2" id="cTendencia"></div>
+      <div class="card span2" id="cRevision"></div>
+      <div class="card span2" id="cBloques"></div>
+    </div>
+  </main>
+
+  <!-- AJUSTES -->
+  <main id="view-ajustes" class="hidden">
+    <div class="card">
+      <h2>Base de empleados</h2>
+      <p class="sub" id="empStatus"></p>
+      <p class="sub">Sube el Excel con la hoja <b>DATA EMPLEADOS</b> (columnas NOMBRE, ESTADO, CEDULA, LUGARDE TRABAJO, CARGO, AREA). Reemplaza la lista: quien aparezca RETIRADO deja de salir en las sugerencias pero su historial se conserva.</p>
+      <input type="file" id="fileEmp" accept=".xlsx,.xls,.csv" class="hidden">
+      <button type="button" class="btn" id="btnEmp">Cargar Excel de empleados</button>
+    </div>
+    <div class="card">
+      <h2>Labores e inventario de plantas</h2>
+      <p class="sub" id="catStatus"></p>
+      <input type="file" id="fileLab" accept=".xlsx,.xls" class="hidden">
+      <input type="file" id="filePlano" accept=".xlsx,.xls" class="hidden">
+      <div class="btn-row">
+        <button type="button" class="btn" id="btnLab">Cargar Excel de labores</button>
+        <button type="button" class="btn" id="btnPlano">Cargar plano de producción</button>
+      </div>
+      <p class="hint">Labores: hoja con columnas LABORES y MEDIDA. Plano: hoja DATA con BLOQUE, LOTE, ERA, CANTIDAD DE PLANTAS, VARIEDAD.</p>
+    </div>
+    <div class="card">
+      <h2>Horario y descuentos</h2>
+      <div class="row3">
+        <div class="field"><label class="f" for="cDesH">Hora desayuno</label><input type="time" id="cDesH"></div>
+        <div class="field"><label class="f" for="cDesM">Minutos</label><input type="number" id="cDesM" min="0"></div>
+        <div class="field"><label class="f" for="cAlmH">Hora almuerzo</label><input type="time" id="cAlmH"></div>
+        <div class="field"><label class="f" for="cAlmM">Minutos</label><input type="number" id="cAlmM" min="0"></div>
+        <div class="field"><label class="f" for="cPauH">Hora pausa</label><input type="time" id="cPauH"></div>
+        <div class="field"><label class="f" for="cPauM">Minutos (0 = no aplica)</label><input type="number" id="cPauM" min="0"></div>
+      </div>
+      <div class="field"><label class="f" for="cJornada">Horas productivas esperadas por día</label><input type="number" id="cJornada" step="0.01" min="0"></div>
+      <button type="button" class="btn" id="saveCfg">Guardar horario</button>
+    </div>
+    <div class="card">
+      <h2>Sincronización</h2>
+      <p class="sub">Pega la URL del Apps Script de la hoja de Google y la clave que definiste en el script.</p>
+      <div class="field"><label class="f" for="cUrl">URL del servidor</label><input type="url" id="cUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+      <div class="field"><label class="f" for="cKey">Clave</label><input type="password" id="cKey"></div>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="saveSync">Guardar y probar</button>
+      </div>
+      <p class="hint" id="syncInfo"></p>
+    </div>
+    <div class="card">
+      <h2>Datos en este celular</h2>
+      <p class="sub" id="localInfo"></p>
+      <div class="btn-row">
+        <button type="button" class="btn" id="exportLocal">Descargar Excel de este celular</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <div id="tip" class="tip hidden"></div>
+
+  <script src="vendor/xlsx.full.min.js" defer></script>
+  <script src="js/db.js" defer></script>
+  <script src="js/calc.js" defer></script>
+  <script src="js/sync.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>

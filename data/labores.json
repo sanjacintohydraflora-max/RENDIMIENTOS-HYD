@@ -1,0 +1,130 @@
+[
+{
+"nombre": "AUSENCIAS POR DIAS",
+"medida": "Tiempo"
+},
+{
+"nombre": "AUSENCIAS POR HORAS",
+"medida": "Tiempo"
+},
+{
+"nombre": "CAPACITACIONES Y ACTIVIDADES",
+"medida": "Tiempo"
+},
+{
+"nombre": "INCAPACIDADES",
+"medida": "Tiempo"
+},
+{
+"nombre": "VACACIONES",
+"medida": "Tiempo"
+},
+{
+"nombre": "COORDINACION DE LABORES",
+"medida": "Tiempo"
+},
+{
+"nombre": "APOYO A POSCOSECHA",
+"medida": "Tiempo"
+},
+{
+"nombre": "MONITOREAR",
+"medida": "Tiempo"
+},
+{
+"nombre": "FUMIGAR",
+"medida": "Tiempo"
+},
+{
+"nombre": "PROGRAMAR CON GUADAÑA Y SOQUEO",
+"medida": "Tiempo"
+},
+{
+"nombre": "GUADAÑAR CALLES Y BORDES",
+"medida": "Tiempo"
+},
+{
+"nombre": "HERVICIDA A CALLES",
+"medida": "Tiempo"
+},
+{
+"nombre": "POLISOMBRAS",
+"medida": "Tiempo"
+},
+{
+"nombre": "PODAR CETOS",
+"medida": "Tiempo"
+},
+{
+"nombre": "MANTENIMIENTO",
+"medida": "Tiempo"
+},
+{
+"nombre": "PONER MALLA",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "BAJAR Y SUBIR MALLAS Y REFORZAR TUTORES",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "FERTILIZAR",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "RALEO LATERAL",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "DESBOTONAR",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "ENCALAR",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "PULIR PROGRAMACION",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "SEMBRAR, RAYAR Y RESEMBRAR",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "ARRANCAR PLANTAS",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "ABONAR",
+"medida": "Tiempo GR"
+},
+{
+"nombre": "CORTAR FLOR",
+"medida": "Tallos"
+},
+{
+"nombre": "DESMALECE 1",
+"medida": "Plantas"
+},
+{
+"nombre": "DESMALECE 2",
+"medida": "Plantas"
+},
+{
+"nombre": "APORCAR Y PICAR SUELOS",
+"medida": "Plantas"
+},
+{
+"nombre": "SELECCIONAR, RALEAR Y PRESELECCION",
+"medida": "Plantas"
+},
+{
+"nombre": "PROGRAMAR A TIJERA",
+"medida": "Plantas"
+},
+{
+"nombre": "DESHOJAR",
+"medida": "Plantas"
+}
+]
