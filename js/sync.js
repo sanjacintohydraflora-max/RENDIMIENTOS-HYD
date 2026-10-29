@@ -35,7 +35,8 @@ const Sync = (() => {
   async function pendientes() {
     const regs = await DB.allRegistros();
     const borrados = await DB.getMeta('borrados', []);
-    return { regs: regs.filter(r => !r.sincronizado), borrados };
+    // Los registros sin terminar se quedan en el celular hasta completarlos.
+    return { regs: regs.filter(r => !r.sincronizado && r.estado !== 'abierto'), borrados };
   }
 
   async function empleadosMapa() {

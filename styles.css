@@ -268,6 +268,7 @@ svg.chart .axis { stroke: var(--border); }
 
 @media (max-width: 420px) {
   .row3 { grid-template-columns: 1fr 1fr; }
+  .row-time { grid-template-columns: 1fr; gap: 0; }
 }
 @media (min-width: 900px) {
   body { padding-bottom: 0; padding-top: 0; }

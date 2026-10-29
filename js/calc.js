@@ -2,7 +2,8 @@
 //   TIEMPO LAB  = (HRA FIN - HRA INICIO) - DESAYUNO - PAUSAS - ALMUERZO   (en horas)
 //   RENDIMIENTO = CANTIDAD / TIEMPO LAB
 // En una labor grupal la cantidad se reparte en partes iguales (todos comparten el mismo horario),
-// y cada persona queda con su propia fila, como en el Excel.
+// y cada persona queda con su propia fila, como en el Excel. Si el registro tiene varios
+// bloques/lotes ("tramos"), cada tramo es una fila y el tiempo se reparte según sus plantas.
 const Calc = (() => {
   const COLUMNAS = [
     'AÑO', 'MES', 'SEM', 'FECHA', 'LUGARDE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
@@ -10,6 +11,13 @@ const Calc = (() => {
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
     'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO',
   ];
+
+  // Registros antiguos guardaban un solo bloque/lote; los nuevos traen la lista `tramos`.
+  function tramosDe(reg) {
+    if (reg.tramos?.length) return reg.tramos;
+    if (reg.bloque || reg.camas?.length) return [{ bloque: reg.bloque || '', lote: reg.lote || '', camas: reg.camas || [], plantas: null }];
+    return [];
+  }
 
   const CONFIG_BASE = {
     desayunoHora: '08:30', desayunoMin: 26,
@@ -101,36 +109,49 @@ const Calc = (() => {
     const rendimiento = tiempoLab > 0 && porPersona > 0 ? porPersona / tiempoLab : 0;
 
     const [y, m] = (reg.fecha || '0000-00').split('-').map(Number);
-    const filas = personas.map(ced => {
+    const tramos = tramosDe(reg);
+    const partes = tramos.length ? tramos : [{ bloque: '', lote: '', camas: [] }];
+    const sumaPl = partes.reduce((s, t) => s + (Number(t.plantas) || 0), 0);
+    const sumaCa = partes.reduce((s, t) => s + (t.camas?.length || 0), 0);
+    const peso = t => (sumaPl > 0 ? (Number(t.plantas) || 0) / sumaPl : sumaCa > 0 ? (t.camas?.length || 0) / sumaCa : 1 / partes.length);
+    const filas = personas.flatMap(ced => partes.map((t, i) => {
       const e = (empleados && empleados[ced]) || { nombre: reg.nombres?.[ced] || ced, cedula: ced };
+      const w = peso(t);
       return {
         'AÑO': y, 'MES': m, 'SEM': reg.fecha ? semanaISO(reg.fecha) : '', 'FECHA': reg.fecha,
         'LUGARDE TRABAJO': e.lugar || '', 'ESTADO': e.estado || '', 'NOMBRE': e.nombre, 'CEDULA': String(ced),
         'LABOR': reg.labor, 'HRA INICIO': reg.horaInicio, 'HRA FIN': reg.horaFin,
-        'HORAS TOTALES': r2(horasTotales), 'DESAYUNO': desayuno, 'PAUSAS': pausa, 'ALMUERZO': almuerzo,
-        'TIEMPO LAB': r2(tiempoLab), 'CANTIDAD': r2(porPersona), 'RENDIMIENTO': r2(rendimiento),
-        'OBSERVACIONES': reg.obs || '', 'MEDIDA': reg.medida || '', 'BLOQUE': reg.bloque || '',
-        'LOTE': reg.lote || '', 'CAMAS': formatCamas(reg.camas || []), 'N CAMAS': (reg.camas || []).length,
+        'HORAS TOTALES': r2(horasTotales * w), 'DESAYUNO': r2(desayuno * w), 'PAUSAS': r2(pausa * w), 'ALMUERZO': r2(almuerzo * w),
+        'TIEMPO LAB': r2(tiempoLab * w), 'CANTIDAD': r2(porPersona * w), 'RENDIMIENTO': r2(rendimiento),
+        'OBSERVACIONES': reg.obs || '', 'MEDIDA': reg.medida || '', 'BLOQUE': t.bloque || '',
+        'LOTE': t.lote || '', 'CAMAS': formatCamas(t.camas || []), 'N CAMAS': (t.camas || []).length,
         'GRUPAL': n > 1 ? 'SI' : 'NO', 'N PERSONAS': n, 'CANTIDAD GRUPO': total, 'LIDER': reg.lider || '',
-        'ID REGISTRO': reg.id, 'ID FILA': `${reg.id}-${ced}`, 'ACTUALIZADO': reg.actualizado || '',
+        'ID REGISTRO': reg.id, 'ID FILA': partes.length > 1 ? `${reg.id}-${ced}-${i + 1}` : `${reg.id}-${ced}`, 'ACTUALIZADO': reg.actualizado || '',
       };
-    });
+    }));
     return { horasTotales, desayuno, almuerzo, pausa, tiempoLab, n, tipo, total, porPersona, rendimiento, filas };
   }
 
   // Devuelve una lista de errores en español; vacía si el registro se puede guardar.
-  function validar(reg, cfg) {
+  // Un registro parcial (sin terminar) solo necesita fecha, labor, personas y hora de inicio.
+  function validar(reg, cfg, { parcial = false } = {}) {
     const e = [];
     if (!reg.fecha) e.push('Falta la fecha.');
     if (!reg.labor) e.push('Elige una labor de la lista.');
     if (!reg.empleados?.length) e.push('Agrega al menos un empleado.');
     const a = minutos(reg.horaInicio), b = minutos(reg.horaFin);
+    if (parcial) {
+      if (a == null) e.push('Falta la hora de inicio.');
+      if (a != null && b != null && b <= a) e.push('La hora de fin debe ser posterior a la de inicio.');
+      return e;
+    }
     if (a == null || b == null) e.push('Faltan la hora de inicio y la de fin.');
     else if (b <= a) e.push('La hora de fin debe ser posterior a la de inicio.');
     const tipo = tipoMedida(reg.medida);
+    const tramos = tramosDe(reg);
     if (tipo === 'plantas') {
-      if (!reg.bloque || !reg.lote) e.push('Esta labor se mide en plantas: elige bloque y lote.');
-      if (!reg.camas?.length) e.push('Esta labor se mide en plantas: marca las camas realizadas.');
+      if (!tramos.length || tramos.some(t => !t.bloque || !t.lote)) e.push('Esta labor se mide en plantas: elige bloque y lote.');
+      if (!tramos.some(t => t.camas?.length)) e.push('Esta labor se mide en plantas: marca las camas realizadas.');
       if (!(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en plantas: el número de plantas es obligatorio.');
     }
     if (tipo === 'tallos' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en tallos: digita los tallos.');
@@ -139,6 +160,25 @@ const Calc = (() => {
       if (c.tiempoLab <= 0) e.push('Con los descuentos marcados el tiempo laborado queda en cero.');
     }
     return e;
+  }
+
+  // Horarios cruzados: una persona no puede estar en dos labores a la vez el mismo día.
+  // Un registro sin terminar ocupa desde su hora de inicio en adelante.
+  function cruces(reg, otros, nombre = c => c) {
+    const fin = r => (r.estado === 'abierto' || minutos(r.horaFin) == null ? Infinity : minutos(r.horaFin));
+    const a = minutos(reg.horaInicio), b = fin(reg);
+    if (a == null) return [];
+    const msgs = [];
+    otros.filter(o => o.id !== reg.id && o.fecha === reg.fecha).forEach(o => {
+      const oa = minutos(o.horaInicio), ob = fin(o);
+      if (oa == null || !(a < ob && oa < b)) return;
+      reg.empleados.filter(c => o.empleados.includes(c)).forEach(c => {
+        msgs.push(o.estado === 'abierto'
+          ? `${nombre(c)} tiene ${o.labor} sin terminar desde las ${o.horaInicio}. Termínalo antes de asignarle otra labor.`
+          : `${nombre(c)} ya está en ${o.labor} de ${o.horaInicio} a ${o.horaFin}; el horario se cruza.`);
+      });
+    });
+    return [...new Set(msgs)];
   }
 
   // Busca empleados por cualquier parte del nombre o cédula. Todas las palabras deben coincidir.
@@ -151,6 +191,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, CONFIG_BASE, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

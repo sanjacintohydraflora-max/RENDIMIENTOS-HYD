@@ -35,6 +35,10 @@
 
   <!-- REGISTRAR -->
   <main id="view-registrar">
+    <div class="card hidden" id="abiertosCard" style="border-color:var(--warn)">
+      <h2 style="color:var(--warn)">Registros sin terminar</h2>
+      <div id="abiertosLista"></div>
+    </div>
     <form id="form" autocomplete="off" novalidate>
       <div class="card">
         <div id="editBanner" class="hidden" style="margin-bottom:12px">
@@ -67,7 +71,7 @@
           <div class="hint" id="empHint">Si la labor es grupal, agrega a todas las personas que participaron.</div>
         </div>
 
-        <div class="row">
+        <div class="row row-time">
           <div class="field">
             <label class="f req" for="hInicio">Hora inicio</label>
             <div class="time-wrap"><input type="time" id="hInicio" required><button type="button" class="btn" data-now="hInicio">Ahora</button></div>
@@ -90,6 +94,11 @@
       </div>
 
       <div class="card">
+        <div id="tramosBox" class="field hidden">
+          <label class="f">Bloques y lotes de este registro</label>
+          <div class="chips" id="tramosChips"></div>
+          <div class="hint">Toca uno para corregirlo. Abajo puedes agregar otro.</div>
+        </div>
         <div class="row">
           <div class="field">
             <label class="f" for="bloque" id="bloqueLbl">Bloque</label>
@@ -109,6 +118,7 @@
           </div>
           <div class="camas-grid" id="camasGrid"></div>
           <div class="hint" id="camasHint">Elige bloque y lote para ver las camas.</div>
+          <button type="button" class="btn small" id="tramoAdd" style="margin-top:10px">+ Añadir otro bloque o lote</button>
         </div>
         <div class="row">
           <div class="field" id="cantField">
@@ -129,6 +139,8 @@
         <div id="formErr" class="err"></div>
         <div style="margin-top:14px">
           <button type="submit" class="btn primary block" id="saveBtn">Guardar registro</button>
+          <button type="button" class="btn block" id="savePartial" style="margin-top:10px">Guardar sin terminar (completar después)</button>
+          <div class="hint" id="partialHint" style="text-align:center">Solo pide labor, personas y hora de inicio. Debes terminarlo antes de registrar otro día.</div>
         </div>
       </div>
     </form>

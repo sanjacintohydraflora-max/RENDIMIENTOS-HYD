@@ -10,7 +10,7 @@
 
   const S = {
     empleados: [], empMap: {}, labores: [], camas: [], cfg: { ...Calc.CONFIG_BASE },
-    sel: [], labor: null, camasSel: new Set(), editId: null, cantManual: false, editOriginal: null,
+    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null,
   };
 
   function toast(msg, ms = 2600) {
@@ -189,10 +189,55 @@
     recalcular();
   }
 
-  function plantasPlano() {
+  // Bloque/lote/camas que están marcados ahora en el selector (aún no añadidos a la lista).
+  function tramoActual() {
+    const bloque = $('bloque').value, lote = $('lote').value;
+    if (!bloque || !lote) return null;
     const lista = camasDelLote();
-    const selec = lista.filter(c => S.camasSel.has(c[2]));
-    return { total: selec.reduce((s, c) => s + c[3], 0), n: selec.length, faltan: [...S.camasSel].filter(n => !lista.some(c => c[2] === n)) };
+    const camas = [...S.camasSel].sort((a, b) => a - b);
+    const plantas = lista.filter(c => S.camasSel.has(c[2])).reduce((s, c) => s + c[3], 0);
+    return { bloque, lote, camas, plantas, faltan: camas.filter(n => !lista.some(c => c[2] === n)) };
+  }
+
+  function tramosFormulario() {
+    const t = tramoActual();
+    const extra = t && (t.camas.length || !S.tramos.length) ? [{ bloque: t.bloque, lote: t.lote, camas: t.camas, plantas: t.plantas }] : [];
+    return [...S.tramos, ...extra];
+  }
+
+  function plantasPlano() {
+    const t = tramoActual();
+    const todos = [...S.tramos, ...(t ? [t] : [])];
+    return {
+      total: todos.reduce((s, x) => s + (Number(x.plantas) || 0), 0),
+      n: todos.reduce((s, x) => s + x.camas.length, 0),
+      faltan: t ? t.faltan : [],
+    };
+  }
+
+  function pintarTramos() {
+    $('tramosBox').classList.toggle('hidden', !S.tramos.length);
+    $('tramosChips').innerHTML = S.tramos.map((t, i) => `<span class="chip"><button type="button" data-tramo="${i}" style="font-size:14px;padding:0;color:var(--text)">${esc(t.bloque)} · Lote ${esc(t.lote)} · camas ${esc(Calc.formatCamas(t.camas) || '—')}${t.plantas ? ` · ${fmt(t.plantas)} pl.` : ''}</button><button type="button" data-quitar-tramo="${i}" aria-label="Quitar">×</button></span>`).join('');
+    $('tramoAdd').textContent = S.tramos.length ? '+ Añadir este bloque y seguir con otro' : '+ Añadir otro bloque o lote';
+  }
+
+  function anadirTramo() {
+    const t = tramoActual();
+    if (!t || !t.camas.length) { toast('Elige bloque, lote y camas antes de añadir.'); return false; }
+    S.tramos.push({ bloque: t.bloque, lote: t.lote, camas: t.camas, plantas: t.plantas });
+    S.camasSel = new Set();
+    $('lote').value = '';
+    pintarTramos(); pintarCamas(); camasCambiaron();
+    return true;
+  }
+
+  function editarTramo(i) {
+    const actual = tramoActual();
+    if (actual && actual.camas.length) S.tramos.push({ bloque: actual.bloque, lote: actual.lote, camas: actual.camas, plantas: actual.plantas });
+    const [t] = S.tramos.splice(i, 1);
+    $('bloque').value = t.bloque; llenarLotes(); $('lote').value = t.lote;
+    S.camasSel = new Set(t.camas);
+    pintarTramos(); pintarCamas(); camasCambiaron();
   }
 
   function autoPlantas() {
@@ -238,9 +283,7 @@
       desayuno: $('dDesayuno').checked,
       almuerzo: $('dAlmuerzo').checked,
       pausa: $('dPausa').checked,
-      bloque: $('bloque').value,
-      lote: $('lote').value,
-      camas: [...S.camasSel].sort((a, b) => a - b),
+      tramos: tramosFormulario(),
       cantidad: $('cantidad').value === '' ? null : Number($('cantidad').value),
       obs: $('obs').value.trim(),
     };
@@ -250,7 +293,7 @@
     const reg = leerFormulario();
     const box = $('calc');
     if (!reg.labor || !reg.empleados.length || !reg.horaInicio || !reg.horaFin) {
-      box.innerHTML = '<div class="empty" style="padding:8px">Completa la labor, las personas y el horario.</div>';
+      box.innerHTML = `<div class="empty" style="padding:8px">${reg.horaInicio && !reg.horaFin ? 'Sin hora de fin: puedes guardarlo sin terminar y completarlo después.' : 'Completa la labor, las personas y el horario.'}</div>`;
       return;
     }
     const c = Calc.calcular(reg, S.cfg, S.empMap);
@@ -269,15 +312,18 @@
 
   function limpiarFormulario(mantener = true) {
     const fin = $('hFin').value;
-    S.sel = []; S.labor = null; S.camasSel = new Set(); S.editId = null; S.cantManual = false; S.editOriginal = null;
+    S.sel = []; S.labor = null; S.camasSel = new Set(); S.tramos = []; S.editId = null; S.cantManual = false; S.editOriginal = null;
     $('laborInput').value = ''; $('empInput').value = ''; $('cantidad').value = ''; $('obs').value = '';
     $('camasText').value = '';
+    $('bloque').value = ''; llenarLotes();
     $('hInicio').value = mantener && fin ? fin : '';
     $('hFin').value = '';
     $('editBanner').classList.add('hidden');
     $('saveBtn').textContent = 'Guardar registro';
+    $('savePartial').classList.remove('hidden'); $('partialHint').classList.remove('hidden');
     $('formErr').textContent = '';
-    pintarChips(); actualizarLabor(); pintarCamas(); aplicarDescuentosAuto();
+    pintarChips(); pintarTramos(); actualizarLabor(); pintarCamas(); aplicarDescuentosAuto();
+    pintarAbiertos();
   }
 
   async function cargarEnFormulario(id) {
@@ -289,31 +335,48 @@
     $('laborInput').value = r.labor;
     S.sel = r.empleados.slice();
     r.empleados.forEach(c => { if (!S.empMap[c]) S.empMap[c] = { nombre: r.nombres?.[c] || c, cedula: c }; });
-    $('hInicio').value = r.horaInicio; $('hFin').value = r.horaFin;
-    $('bloque').value = r.bloque || ''; llenarLotes(); $('lote').value = r.lote || '';
-    S.camasSel = new Set(r.camas || []);
-    S.cantManual = true;
+    $('hInicio').value = r.horaInicio; $('hFin').value = r.horaFin || '';
+    S.tramos = Calc.tramosDe(r).map(t => ({ ...t, camas: [...(t.camas || [])] }));
+    $('bloque').value = ''; llenarLotes();
+    S.camasSel = new Set();
+    pintarTramos();
+    S.cantManual = r.cantidad != null && r.estado !== 'abierto';
     $('cantidad').value = r.cantidad ?? '';
     $('obs').value = r.obs || '';
     pintarCamas(); camasCambiaron();
     $('dDesayuno').checked = !!r.desayuno; $('dAlmuerzo').checked = !!r.almuerzo; $('dPausa').checked = !!r.pausa;
     pintarChips(); actualizarLabor();
+    const abierto = r.estado === 'abierto';
     $('editBanner').classList.remove('hidden');
-    $('saveBtn').textContent = 'Guardar cambios';
+    $('editBanner').querySelector('.badge').textContent = abierto ? 'Terminando registro' : 'Editando registro';
+    $('saveBtn').textContent = abierto ? 'Terminar registro' : 'Guardar cambios';
+    $('savePartial').classList.toggle('hidden', !abierto); $('partialHint').classList.toggle('hidden', !abierto);
+    if (abierto && !r.horaFin) setTimeout(() => $('hFin').focus(), 50);
+    pintarAbiertos();
     mostrar('registrar');
     window.scrollTo(0, 0);
   }
 
-  async function guardar(ev) {
-    ev.preventDefault();
+  async function guardar(ev, parcial = false) {
+    ev?.preventDefault();
     // Si escribió una labor exacta sin elegirla de la lista, se acepta.
     if (!S.labor && $('laborInput').value) {
       const l = S.labores.find(x => Calc.norm(x.nombre) === Calc.norm($('laborInput').value));
       if (l) S.labor = l;
     }
     const reg = leerFormulario();
-    const errores = Calc.validar(reg, S.cfg);
+    reg.estado = parcial ? 'abierto' : 'completo';
+    if (parcial) reg.horaFin = '';
+    const errores = Calc.validar(reg, S.cfg, { parcial });
     if ($('laborInput').value && !S.labor) errores.unshift('La labor escrita no está en la lista; elígela de las sugerencias.');
+    const todos = await DB.allRegistros();
+    // No se empieza otro día mientras queden registros sin terminar de días anteriores.
+    const pendientes = todos.filter(r => r.estado === 'abierto' && r.id !== reg.id && r.fecha < reg.fecha);
+    if (pendientes.length) {
+      const dias = [...new Set(pendientes.map(r => r.fecha))].join(', ');
+      errores.unshift(`Tienes ${pendientes.length} registro(s) sin terminar del ${dias}. Termínalos antes de registrar el ${reg.fecha}.`);
+    }
+    errores.push(...Calc.cruces(reg, todos, c => S.empMap[c]?.nombre || reg.nombres?.[c] || c));
     if (errores.length) { $('formErr').innerHTML = errores.map(esc).join('<br>'); return; }
     reg.creado = S.editOriginal?.creado || new Date().toISOString();
     reg.actualizado = new Date().toISOString();
@@ -321,10 +384,26 @@
     await DB.putRegistro(reg);
     if (reg.lider) await DB.setMeta('lider', reg.lider);
     const editando = !!S.editId;
-    toast(editando ? 'Cambios guardados' : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`);
-    limpiarFormulario(!editando);
+    toast(parcial ? 'Guardado sin terminar. Lo completas desde el aviso de arriba o en Registros.'
+      : editando ? (S.editOriginal?.estado === 'abierto' ? 'Registro terminado' : 'Cambios guardados')
+        : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
+    limpiarFormulario(!editando && !parcial);
     actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
+  }
+
+  // ---------- Registros sin terminar ----------
+  async function pintarAbiertos() {
+    const abiertos = (await DB.allRegistros()).filter(r => r.estado === 'abierto' && r.id !== S.editId)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio));
+    $('abiertosCard').classList.toggle('hidden', !abiertos.length);
+    $('abiertosLista').innerHTML = abiertos.map(r => {
+      const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
+      const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}${x.camas?.length ? ` camas ${Calc.formatCamas(x.camas)}` : ''}`).join(' · ');
+      return `<div class="reg"><div class="r-main"><div class="r-t">${esc(r.labor)}</div><div class="r-s">${esc(nombres)}</div>
+        <div class="r-s">${esc(r.fecha)} desde las ${esc(r.horaInicio)}${t ? ` · ${esc(t)}` : ''}</div></div>
+        <div class="r-a"><button type="button" class="btn small primary" data-editar="${r.id}">Completar</button></div></div>`;
+    }).join('');
   }
 
   // ---------- Registros del día ----------
@@ -341,11 +420,11 @@
       const c = Calc.calcular(r, S.cfg, S.empMap);
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
       const unidad = c.tipo === 'tallos' ? 'tallos' : 'plantas';
+      const abierto = r.estado === 'abierto';
       const det = [
-        `${r.horaInicio}–${r.horaFin} (${fmt(c.tiempoLab, 2)} h)`,
-        r.bloque && `${r.bloque} lote ${r.lote}`,
-        r.camas?.length && `camas ${Calc.formatCamas(r.camas)}`,
-        c.tipo !== 'tiempo' && `${fmt(c.total)} ${unidad} · ${fmt(c.rendimiento, 1)} ${unidad}/h por persona`,
+        abierto ? `desde las ${r.horaInicio}, sin terminar` : `${r.horaInicio}–${r.horaFin} (${fmt(c.tiempoLab, 2)} h)`,
+        ...Calc.tramosDe(r).map(t => `${t.bloque} lote ${t.lote}${t.camas?.length ? ` camas ${Calc.formatCamas(t.camas)}` : ''}`),
+        !abierto && c.tipo !== 'tiempo' && `${fmt(c.total)} ${unidad} · ${fmt(c.rendimiento, 1)} ${unidad}/h por persona`,
       ].filter(Boolean).join(' · ');
       return `<div class="reg">
         <div class="r-main">
@@ -355,8 +434,8 @@
           ${r.obs ? `<div class="r-s">${esc(r.obs)}</div>` : ''}
         </div>
         <div class="r-a">
-          <span class="st ${r.sincronizado ? 'ok' : 'pend'}">${r.sincronizado ? 'Sincronizado' : 'Pendiente'}</span>
-          <button type="button" class="btn small" data-editar="${r.id}">Editar</button>
+          ${abierto ? '<span class="st pend">Sin terminar</span>' : `<span class="st ${r.sincronizado ? 'ok' : 'pend'}">${r.sincronizado ? 'Sincronizado' : 'Pendiente'}</span>`}
+          <button type="button" class="btn small ${abierto ? 'primary' : ''}" data-editar="${r.id}">${abierto ? 'Completar' : 'Editar'}</button>
           <button type="button" class="btn small danger" data-borrar="${r.id}">Borrar</button>
         </div>
       </div>`;
@@ -369,14 +448,15 @@
       r.empleados.forEach(ced => {
         const p = porPersona[ced] ||= { nombre: S.empMap[ced]?.nombre || r.nombres?.[ced] || ced, horas: 0, tramos: [] };
         p.horas += c.tiempoLab;
-        p.tramos.push([Calc.minutos(r.horaInicio), Calc.minutos(r.horaFin)]);
+        if (r.estado === 'abierto') p.abierto = true;
+        else p.tramos.push([Calc.minutos(r.horaInicio), Calc.minutos(r.horaFin)]);
       });
     });
     const filas = Object.values(porPersona).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(p => {
       p.tramos.sort((a, b) => a[0] - b[0]);
       const cruce = p.tramos.some((t, i) => i > 0 && t[0] < p.tramos[i - 1][1]);
       const bajo = p.horas < S.cfg.jornada - 0.25;
-      const nota = cruce ? '<span class="flag-high">Horarios cruzados</span>' : bajo ? `<span class="flag-low">Faltan ${fmt(S.cfg.jornada - p.horas, 2)} h</span>` : 'Completo';
+      const nota = p.abierto ? '<span class="flag-low">Labor sin terminar</span>' : cruce ? '<span class="flag-high">Horarios cruzados</span>' : bajo ? `<span class="flag-low">Faltan ${fmt(S.cfg.jornada - p.horas, 2)} h</span>` : 'Completo';
       return `<tr><td>${esc(p.nombre)}</td><td class="n">${fmt(p.horas, 2)}</td><td>${nota}</td></tr>`;
     }).join('');
     $('hoyHoras').innerHTML = `<div class="table-scroll"><table class="hours-table"><thead><tr><th>Persona</th><th class="n">Horas lab.</th><th>Revisión (jornada ${fmt(S.cfg.jornada, 2)} h)</th></tr></thead><tbody>${filas}</tbody></table></div>`;
@@ -505,7 +585,7 @@
   }
 
   async function filasLocales() {
-    const regs = await DB.allRegistros();
+    const regs = (await DB.allRegistros()).filter(r => r.estado !== 'abierto');
     return regs.flatMap(r => Calc.calcular(r, S.cfg, S.empMap).filas);
   }
 
@@ -565,7 +645,18 @@
     });
     $('obs').addEventListener('input', recalcular);
     $('fecha').addEventListener('change', recalcular);
-    $('form').addEventListener('submit', guardar);
+    $('form').addEventListener('submit', ev => guardar(ev, false));
+    $('savePartial').addEventListener('click', () => guardar(null, true));
+    $('tramoAdd').addEventListener('click', anadirTramo);
+    $('tramosChips').addEventListener('click', ev => {
+      const q = ev.target.closest('[data-quitar-tramo]');
+      if (q) { S.tramos.splice(+q.dataset.quitarTramo, 1); pintarTramos(); camasCambiaron(); return; }
+      const e = ev.target.closest('[data-tramo]');
+      if (e) editarTramo(+e.dataset.tramo);
+    });
+    $('abiertosLista').addEventListener('click', ev => {
+      const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
+    });
     $('cancelEdit').addEventListener('click', () => limpiarFormulario(false));
 
     $('hoyFecha').addEventListener('change', pintarHoy);
