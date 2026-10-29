@@ -131,8 +131,30 @@
     $('cantLbl').textContent = tipo === 'tallos' ? 'Tallos' : 'Plantas';
     $('cantLbl').classList.toggle('req', tipo !== 'tiempo');
     if (tipo === 'plantas' && !S.cantManual) autoPlantas();
+    // Vacaciones, incapacidades y ausencias por días: rango de fechas y jornada completa.
+    const porDias = !!l && Calc.esPorDias(l.nombre) && !S.editId;
+    $('rangoField').classList.toggle('hidden', !porDias);
+    if (porDias) {
+      $('hInicio').value = S.cfg.jornadaInicio;
+      $('hFin').value = S.cfg.jornadaFin;
+      aplicarDescuentosAuto();
+      pintarRango();
+    } else $('fechaHasta').value = '';
     actualizarCantHint();
     recalcular();
+  }
+
+  function diasRango() {
+    const desde = $('fecha').value, hasta = $('fechaHasta').value;
+    if (!desde || !hasta || hasta <= desde) return [desde].filter(Boolean);
+    return Calc.diasDelRango(desde, hasta, $('rangoSabados').checked);
+  }
+
+  function pintarRango() {
+    const dias = diasRango();
+    $('rangoHint').textContent = $('fechaHasta').value && $('fechaHasta').value > $('fecha').value
+      ? `Se crearán ${dias.length} registros, uno por día hábil (${$('rangoSabados').checked ? 'lunes a sábado' : 'lunes a viernes'}), de ${$('hInicio').value || S.cfg.jornadaInicio} a ${$('hFin').value || S.cfg.jornadaFin}.`
+      : 'Para varios días, pon el último día. Si es un solo día, déjalo vacío.';
   }
 
   function pintarChips() {
@@ -372,23 +394,34 @@
     const errores = Calc.validar(reg, S.cfg, { parcial });
     if ($('laborInput').value && !S.labor) errores.unshift('La labor escrita no está en la lista; elígela de las sugerencias.');
     const todos = await DB.allRegistros();
+    const dias = !parcial && !S.editId && S.labor && Calc.esPorDias(S.labor.nombre) ? diasRango() : [reg.fecha];
+    if ($('fechaHasta').value && $('fechaHasta').value < reg.fecha && dias.length <= 1) errores.push('La fecha final del rango es anterior a la fecha inicial.');
+    if (!dias.length) errores.push('El rango no tiene días hábiles.');
     // No se empieza otro día mientras queden registros sin terminar de días anteriores.
     const pendientes = todos.filter(r => r.estado === 'abierto' && r.id !== reg.id && r.fecha < reg.fecha);
     if (pendientes.length) {
       const dias = [...new Set(pendientes.map(r => r.fecha))].join(', ');
       errores.unshift(`Tienes ${pendientes.length} registro(s) sin terminar del ${dias}. Termínalos antes de registrar el ${reg.fecha}.`);
     }
-    errores.push(...Calc.cruces(reg, todos, c => S.empMap[c]?.nombre || reg.nombres?.[c] || c));
-    if (errores.length) { $('formErr').innerHTML = errores.map(esc).join('<br>'); return; }
-    reg.creado = S.editOriginal?.creado || new Date().toISOString();
-    reg.actualizado = new Date().toISOString();
-    reg.sincronizado = false;
-    await DB.putRegistro(reg);
+    const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
+    const copias = dias.map((f, i) => (i === 0 ? Object.assign(reg, { fecha: f }) : { ...reg, id: uid(), fecha: f }));
+    // Al empezar un día nuevo, el último día de cada persona debe tener la jornada completa.
+    if (!S.editId && copias.length) errores.push(...Calc.diaIncompleto(copias[0], todos, S.cfg, nombre));
+    copias.forEach(cp => errores.push(...Calc.cruces(cp, todos, nombre).map(m => (copias.length > 1 ? `${cp.fecha}: ${m}` : m))));
+    if (errores.length) { $('formErr').innerHTML = [...new Set(errores)].map(esc).join('<br>'); return; }
+    const ahora = new Date().toISOString();
+    copias.forEach(cp => {
+      cp.creado = (cp === reg && S.editOriginal?.creado) || ahora;
+      cp.actualizado = ahora;
+      cp.sincronizado = false;
+    });
+    await DB.putRegistros(copias);
     if (reg.lider) await DB.setMeta('lider', reg.lider);
     const editando = !!S.editId;
     toast(parcial ? 'Guardado sin terminar. Lo completas desde el aviso de arriba o en Registros.'
       : editando ? (S.editOriginal?.estado === 'abierto' ? 'Registro terminado' : 'Cambios guardados')
-        : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
+        : copias.length > 1 ? `Se registraron ${copias.length} días, del ${copias[0].fecha} al ${copias[copias.length - 1].fecha}`
+          : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
     limpiarFormulario(!editando && !parcial);
     actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
@@ -577,6 +610,8 @@
     $('cAlmH').value = c.almuerzoHora; $('cAlmM').value = c.almuerzoMin;
     $('cPauH').value = c.pausaHora; $('cPauM').value = c.pausaMin;
     $('cJornada').value = c.jornada;
+    $('cJornadaSab').value = c.jornadaSabado ?? c.jornada;
+    $('cJorIni').value = c.jornadaInicio || '06:15'; $('cJorFin').value = c.jornadaFin || '15:30';
     const s = await DB.getMeta('sync', { url: '', key: '' });
     $('cUrl').value = s.url; $('cKey').value = s.key;
     const regs = await DB.allRegistros();
@@ -750,12 +785,16 @@
     subir('btnPlano', 'filePlano', async f => { const r = await importarPlano(f); return { n: r.length, nota: await alServidor('camas', r) }; },
       r => `${r.n} camas cargadas del plano.${r.nota}`);
 
+    ['fecha', 'fechaHasta', 'rangoSabados', 'hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', pintarRango));
+
     $('saveCfg').addEventListener('click', async () => {
       S.cfg = {
         desayunoHora: $('cDesH').value || '08:30', desayunoMin: Number($('cDesM').value) || 0,
         almuerzoHora: $('cAlmH').value || '12:00', almuerzoMin: Number($('cAlmM').value) || 0,
         pausaHora: $('cPauH').value || '10:00', pausaMin: Number($('cPauM').value) || 0,
         jornada: Number($('cJornada').value) || 8.4,
+        jornadaSabado: $('cJornadaSab').value === '' ? Number($('cJornada').value) || 8.4 : Number($('cJornadaSab').value),
+        jornadaInicio: $('cJorIni').value || '06:15', jornadaFin: $('cJorFin').value || '15:30',
       };
       await DB.setMeta('config', S.cfg);
       pintarMinutosDescuento();

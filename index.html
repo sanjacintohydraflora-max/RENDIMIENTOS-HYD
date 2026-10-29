@@ -56,6 +56,18 @@
             <input type="text" id="lider" placeholder="Tu nombre">
           </div>
         </div>
+        <div id="rangoField" class="hidden">
+          <div class="row">
+            <div class="field">
+              <label class="f" for="fechaHasta">Hasta (último día)</label>
+              <input type="date" id="fechaHasta">
+            </div>
+            <div class="field" style="display:flex;align-items:flex-end">
+              <label class="check" style="width:100%"><input type="checkbox" id="rangoSabados"> Incluir sábados</label>
+            </div>
+          </div>
+          <div class="hint" id="rangoHint" style="margin:-6px 0 14px"></div>
+        </div>
 
         <div class="field">
           <label class="f req" for="laborInput">Labor</label>
@@ -234,7 +246,13 @@
         <div class="field"><label class="f" for="cPauH">Hora pausa</label><input type="time" id="cPauH"></div>
         <div class="field"><label class="f" for="cPauM">Minutos (0 = no aplica)</label><input type="number" id="cPauM" min="0"></div>
       </div>
+      <div class="row">
+        <div class="field"><label class="f" for="cJorIni">Entrada (vacaciones e incapacidades)</label><input type="time" id="cJorIni"></div>
+        <div class="field"><label class="f" for="cJorFin">Salida</label><input type="time" id="cJorFin"></div>
+      </div>
       <div class="field"><label class="f" for="cJornada">Horas productivas esperadas por día</label><input type="number" id="cJornada" step="0.01" min="0"></div>
+      <div class="field"><label class="f" for="cJornadaSab">Horas esperadas el sábado (0 = no revisar)</label><input type="number" id="cJornadaSab" step="0.01" min="0"></div>
+      <div class="hint" style="margin:-6px 0 14px">No deja empezar un día nuevo si el último día de algún trabajador tiene menos horas que estas.</div>
       <button type="button" class="btn" id="saveCfg">Guardar horario</button>
     </div>
     <div class="card">

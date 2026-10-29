@@ -24,6 +24,8 @@ const Calc = (() => {
     almuerzoHora: '12:00', almuerzoMin: 25,
     pausaHora: '10:00', pausaMin: 0,
     jornada: 8.4,
+    jornadaInicio: '06:15', jornadaFin: '15:30',
+    jornadaSabado: 8.4,
   };
 
   const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
@@ -43,6 +45,24 @@ const Calc = (() => {
     if (m.startsWith('TALLO')) return 'tallos';
     return 'tiempo';
   }
+  // Labores que cubren días completos y se pueden registrar por rango de fechas.
+  const esPorDias = labor => /VACACION|INCAPACIDAD|AUSENCIAS? POR DIA/.test(norm(labor));
+
+  // Días entre dos fechas (YYYY-MM-DD), sin domingos y con sábados opcionales.
+  function diasDelRango(desde, hasta, sabados = false) {
+    const out = [];
+    const [y, m, d] = desde.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    for (let i = 0; i < 400; i++) {
+      const s = dt.toISOString().slice(0, 10);
+      if (s > hasta) break;
+      const dow = dt.getUTCDay();
+      if (dow !== 0 && (dow !== 6 || sabados)) out.push(s);
+      dt.setUTCDate(dt.getUTCDate() + 1);
+    }
+    return out;
+  }
+
   const esGrupalPorMedida = medida => /\bGR\b/.test(norm(medida));
 
   // Un descuento aplica cuando su hora cae dentro del intervalo trabajado.
@@ -181,6 +201,24 @@ const Calc = (() => {
     return [...new Set(msgs)];
   }
 
+  // Antes de empezar un día, el último día trabajado de cada persona debe tener la jornada completa.
+  // Se compara el tiempo laborado (ya sin desayuno ni almuerzo) con las horas esperadas.
+  function diaIncompleto(reg, otros, cfg, nombre = c => c) {
+    const msgs = [];
+    const previos = otros.filter(o => o.id !== reg.id && o.estado !== 'abierto' && o.fecha < reg.fecha);
+    reg.empleados.forEach(c => {
+      const suyos = previos.filter(o => o.empleados.includes(c));
+      if (!suyos.length) return;
+      const ultimo = suyos.reduce((m, o) => (o.fecha > m ? o.fecha : m), '');
+      const horas = suyos.filter(o => o.fecha === ultimo).reduce((s, o) => s + calcular(o, cfg, null).tiempoLab, 0);
+      const [y, m, d] = ultimo.split('-').map(Number);
+      const sabado = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
+      const meta = Number(sabado ? cfg.jornadaSabado ?? cfg.jornada : cfg.jornada) || 0;
+      if (meta > 0 && horas < meta - 0.02) msgs.push(`${nombre(c)} tiene ${r2(horas)} h de ${meta} h el ${ultimo}. Completa ese día antes de registrar el ${reg.fecha}.`);
+    });
+    return msgs;
+  }
+
   // Busca empleados por cualquier parte del nombre o cédula. Todas las palabras deben coincidir.
   function buscar(lista, q, campo = 'nombre', extra = []) {
     const toks = norm(q).split(/\s+/).filter(Boolean);
@@ -191,6 +229,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, diaIncompleto, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;
