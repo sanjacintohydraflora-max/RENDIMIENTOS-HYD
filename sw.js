@@ -1,6 +1,6 @@
 // Service worker: guarda la app en el celular para abrirla sin señal.
 // Cambia VERSION en cada publicación para que los celulares bajen la versión nueva.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `rendimientos-${VERSION}`;
 const ARCHIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
@@ -10,7 +10,10 @@ const ARCHIVOS = [
 ];
 
 self.addEventListener('install', ev => {
-  ev.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  // cache: 'reload' salta el caché HTTP del navegador (GitHub Pages lo guarda 10 minutos).
+  ev.waitUntil(caches.open(CACHE)
+    .then(c => c.addAll(ARCHIVOS.map(u => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', ev => {
@@ -29,7 +32,7 @@ self.addEventListener('fetch', ev => {
   ev.respondWith(
     caches.open(CACHE).then(async cache => {
       const enCache = await cache.match(ev.request, { ignoreSearch: true });
-      const red = fetch(ev.request).then(res => {
+      const red = fetch(ev.request, { cache: 'no-cache' }).then(res => {
         if (res.ok) cache.put(ev.request, res.clone());
         return res;
       }).catch(() => null);

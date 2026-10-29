@@ -769,7 +769,21 @@
   }
 
   async function iniciar() {
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      // Cuando llega una versión nueva de la app, recarga una vez para mostrarla.
+      const habiaControlador = !!navigator.serviceWorker.controller;
+      let recargado = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!habiaControlador || recargado) return;
+        // No recarga si hay un registro a medio llenar: se perdería lo escrito.
+        if (S.sel.length || S.labor || $('laborInput').value || $('empInput').value) { toast('Hay una versión nueva de la app. Se verá la próxima vez que la abras.', 4000); return; }
+        recargado = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then(reg => { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); }); })
+        .catch(() => {});
+    }
     await cargarCatalogos();
     enlazar();
     $('fecha').value = hoyStr();
