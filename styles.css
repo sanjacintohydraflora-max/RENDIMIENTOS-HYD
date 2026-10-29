@@ -1,55 +1,57 @@
 :root {
   color-scheme: light;
-  --bg: #f4f5f1;
+  --bg: #f3f6f9;
   --surface: #ffffff;
-  --surface-2: #eef0ea;
-  --border: #d9dcd2;
-  --text: #1b1d18;
-  --text-2: #55594f;
-  --text-3: #7d8176;
-  --brand: #2f6b3a;
+  --surface-2: #edf2f6;
+  --border: #d5dee6;
+  --text: #14202b;
+  --text-2: #4d5b68;
+  --text-3: #77838f;
+  --brand: #00417c;
   --brand-ink: #ffffff;
-  --brand-soft: #e3efe3;
-  --series-1: #2a78d6;
-  --series-1-soft: #cde2fb;
+  --brand-soft: #e3eef8;
+  --series-1: #1f86c4;
+  --series-1-soft: #cfe6f4;
   --good: #1f7a3a;
   --warn: #b26b00;
   --warn-soft: #fff1d6;
   --bad: #c03a3a;
   --bad-soft: #fbe3e3;
-  --grid: #e6e8e1;
+  --grid: #e3e9ee;
   --radius: 12px;
   --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 2px 8px rgba(0, 0, 0, .04);
+  --leaf: #a9c60d;
+  --header-bg: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #141613;
-    --surface: #1d201b;
-    --surface-2: #262a24;
-    --border: #363b33;
-    --text: #eef0ea;
-    --text-2: #c0c4b8;
-    --text-3: #9298a0;
-    --brand: #5fa96b;
-    --brand-ink: #0d1a0f;
-    --brand-soft: #223525;
-    --series-1: #3987e5;
-    --series-1-soft: #184f95;
+    --bg: #10161c;
+    --surface: #18212a;
+    --surface-2: #212c36;
+    --border: #33414e;
+    --text: #ecf1f5;
+    --text-2: #bcc7d1;
+    --text-3: #8f9ba6;
+    --brand: #5aa9e6;
+    --brand-ink: #08182a;
+    --brand-soft: #13304a;
+    --series-1: #3ea0dc;
+    --series-1-soft: #164a70;
     --good: #5cbf73;
     --warn: #e0a33c;
     --warn-soft: #3a2e17;
     --bad: #e66767;
     --bad-soft: #3d2020;
-    --grid: #2c302a;
+    --grid: #26323d;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #141613; --surface: #1d201b; --surface-2: #262a24; --border: #363b33;
-  --text: #eef0ea; --text-2: #c0c4b8; --text-3: #9298a0; --brand: #5fa96b; --brand-ink: #0d1a0f;
-  --brand-soft: #223525; --series-1: #3987e5; --series-1-soft: #184f95; --good: #5cbf73;
-  --warn: #e0a33c; --warn-soft: #3a2e17; --bad: #e66767; --bad-soft: #3d2020; --grid: #2c302a;
+  --bg: #10161c; --surface: #18212a; --surface-2: #212c36; --border: #33414e;
+  --text: #ecf1f5; --text-2: #bcc7d1; --text-3: #8f9ba6; --brand: #5aa9e6; --brand-ink: #08182a;
+  --brand-soft: #13304a; --series-1: #3ea0dc; --series-1-soft: #164a70; --good: #5cbf73;
+  --warn: #e0a33c; --warn-soft: #3a2e17; --bad: #e66767; --bad-soft: #3d2020; --grid: #26323d;
 }
 
 * { box-sizing: border-box; }
@@ -67,19 +69,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Encabezado y navegación */
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px;
-  background: var(--brand); color: var(--brand-ink);
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  background: var(--header-bg); color: #00417c;
+  border-bottom: 3px solid var(--leaf);
 }
-.topbar h1 { font-size: 17px; margin: 0; flex: 1; font-weight: 650; }
+.topbar .logo { height: 36px; width: auto; display: block; }
+.topbar h1 { font-size: 15px; margin: 0; flex: 1; font-weight: 600; color: #4d5b68; border-left: 1px solid #d5dee6; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sync-pill {
   border: 0; border-radius: 999px; padding: 6px 12px;
-  background: rgba(255, 255, 255, .18); color: inherit; font-size: 13px; cursor: pointer;
+  background: #e3eef8; color: #00417c; font-size: 13px; cursor: pointer; font-weight: 600;
   display: flex; align-items: center; gap: 6px; white-space: nowrap;
 }
-.sync-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #d8e8d0; }
-.sync-pill.pend .dot { background: #ffc94d; }
-.sync-pill.off .dot { background: #ff8a80; }
+.sync-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #2e9e4f; }
+.sync-pill.pend .dot { background: #e0a000; }
+.sync-pill.off .dot { background: #d33c3c; }
 
 .tabs {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
@@ -272,7 +276,7 @@ svg.chart .axis { stroke: var(--border); }
 }
 @media (min-width: 900px) {
   body { padding-bottom: 0; padding-top: 0; }
-  .tabs { position: sticky; top: 52px; bottom: auto; border-top: 0; border-bottom: 1px solid var(--border);
+  .tabs { position: sticky; top: 55px; bottom: auto; border-top: 0; border-bottom: 1px solid var(--border);
     grid-template-columns: repeat(4, max-content); justify-content: center; gap: 8px; }
   .tabs button { flex-direction: row; gap: 8px; padding: 12px 18px; font-size: 14px; }
   .tabs button svg { width: 18px; height: 18px; }
