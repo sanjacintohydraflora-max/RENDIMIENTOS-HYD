@@ -294,7 +294,7 @@
   }
 
   function leerFormulario() {
-    return {
+    const reg = {
       id: S.editId || uid(),
       fecha: $('fecha').value,
       lider: $('lider').value.trim(),
@@ -311,6 +311,9 @@
       cantidad: $('cantidad').value === '' ? null : Number($('cantidad').value),
       obs: $('obs').value.trim(),
     };
+    // Vacaciones, incapacidades y ausencias: jornada completa con desayuno, almuerzo y pausa descontados.
+    if (S.labor && Calc.esPorDias(S.labor.nombre)) Object.assign(reg, { desayuno: true, almuerzo: true, pausa: true, pausaMin: S.cfg.pausaDiasMin });
+    return reg;
   }
 
   function recalcular() {
@@ -609,6 +612,7 @@
     $('cDesH').value = c.desayunoHora; $('cDesM').value = c.desayunoMin;
     $('cAlmH').value = c.almuerzoHora; $('cAlmM').value = c.almuerzoMin;
     $('cPauH').value = c.pausaHora; $('cPauM').value = c.pausaMin;
+    $('cPauDiasM').value = c.pausaDiasMin ?? 10;
     $('cJornada').value = c.jornada;
     $('cJornadaSab').value = c.jornadaSabado ?? c.jornada;
     $('cJorIni').value = c.jornadaInicio || '06:15'; $('cJorFin').value = c.jornadaFin || '15:30';
@@ -792,6 +796,7 @@
         desayunoHora: $('cDesH').value || '08:30', desayunoMin: Number($('cDesM').value) || 0,
         almuerzoHora: $('cAlmH').value || '12:00', almuerzoMin: Number($('cAlmM').value) || 0,
         pausaHora: $('cPauH').value || '10:00', pausaMin: Number($('cPauM').value) || 0,
+        pausaDiasMin: Number($('cPauDiasM').value) || 0,
         jornada: Number($('cJornada').value) || 8.4,
         jornadaSabado: $('cJornadaSab').value === '' ? Number($('cJornada').value) || 8.4 : Number($('cJornadaSab').value),
         jornadaInicio: $('cJorIni').value || '06:15', jornadaFin: $('cJorFin').value || '15:30',

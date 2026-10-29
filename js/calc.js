@@ -25,7 +25,7 @@ const Calc = (() => {
     pausaHora: '10:00', pausaMin: 0,
     jornada: 8.4,
     jornadaInicio: '06:15', jornadaFin: '15:30',
-    jornadaSabado: 8.4,
+    jornadaSabado: 8.4, pausaDiasMin: 10,
   };
 
   const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
@@ -119,7 +119,7 @@ const Calc = (() => {
     const horasTotales = a != null && b != null && b > a ? (b - a) / 60 : 0;
     const desayuno = reg.desayuno ? r2(cfg.desayunoMin / 60) : 0;
     const almuerzo = reg.almuerzo ? r2(cfg.almuerzoMin / 60) : 0;
-    const pausa = reg.pausa ? r2(cfg.pausaMin / 60) : 0;
+    const pausa = reg.pausa ? r2((reg.pausaMin ?? cfg.pausaMin) / 60) : 0;
     const tiempoLab = Math.max(0, horasTotales - desayuno - almuerzo - pausa);
     const personas = reg.empleados || [];
     const n = personas.length;
@@ -210,6 +210,8 @@ const Calc = (() => {
       const suyos = previos.filter(o => o.empleados.includes(c));
       if (!suyos.length) return;
       const ultimo = suyos.reduce((m, o) => (o.fecha > m ? o.fecha : m), '');
+      // Un día de vacaciones, incapacidad o ausencia cuenta como completo.
+      if (suyos.some(o => o.fecha === ultimo && esPorDias(o.labor))) return;
       const horas = suyos.filter(o => o.fecha === ultimo).reduce((s, o) => s + calcular(o, cfg, null).tiempoLab, 0);
       const [y, m, d] = ultimo.split('-').map(Number);
       const sabado = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
