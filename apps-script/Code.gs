@@ -14,7 +14,7 @@
  * hacer tablas dinámicas o descargarla a Excel cuando quieras.
  */
 
-const CLAVE_INICIAL = 'cambia-esta-clave';
+const CLAVE_INICIAL = 'Hydraflora';
 
 const HOJAS = {
   RENDIMIENTOS: [
