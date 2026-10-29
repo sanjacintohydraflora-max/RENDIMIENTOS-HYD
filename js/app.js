@@ -45,6 +45,8 @@
       const e = await cargarJSON('local/empleados.json');
       if (e?.length) { S.empleados = e; await DB.setMeta('empleados', e); }
     }
+    // Una hoja con la columna de lugar renombrada devolvía el texto "undefined".
+    S.empleados.forEach(e => { if (e.lugar === 'undefined') e.lugar = ''; });
     S.empMap = Object.fromEntries(S.empleados.map(e => [String(e.cedula), e]));
     llenarBloques();
   }
@@ -596,6 +598,17 @@
     XLSX.writeFile(wb, nombre);
   }
 
+  // Vuelve a enviar todo lo terminado (el servidor reemplaza por registro, no duplica).
+  // Se usa una vez cuando una corrección cambia lo que se manda a la hoja.
+  async function reenviarUnaVez(marca) {
+    const hechas = await DB.getMeta('reenvios', []);
+    if (hechas.includes(marca)) return;
+    const regs = (await DB.allRegistros()).filter(r => r.estado !== 'abierto' && r.sincronizado);
+    regs.forEach(r => { r.sincronizado = false; });
+    if (regs.length) await DB.putRegistros(regs);
+    await DB.setMeta('reenvios', [...hechas, marca]);
+  }
+
   // ---------- Compartir la conexión ----------
   // El enlace lleva la URL y la clave después del #, que el navegador nunca envía a GitHub.
   const codificar = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
@@ -785,6 +798,7 @@
         .catch(() => {});
     }
     await cargarCatalogos();
+    await reenviarUnaVez('lugar-trabajo-2026-10-29');
     enlazar();
     $('fecha').value = hoyStr();
     $('hoyFecha').value = hoyStr();

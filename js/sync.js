@@ -52,7 +52,8 @@ const Sync = (() => {
     const emp = await empleadosMapa();
     for (let i = 0; i < Math.max(regs.length, 1); i += 100) {
       const lote = regs.slice(i, i + 100);
-      const payload = lote.map(r => ({ id: r.id, filas: Calc.calcular(r, cfg, emp).filas }));
+      // El lugar va con los dos nombres de columna: así lo llena cualquier versión del script.
+      const payload = lote.map(r => ({ id: r.id, filas: Calc.calcular(r, cfg, emp).filas.map(f => ({ ...f, 'LUGARDE TRABAJO': f['LUGAR DE TRABAJO'] })) }));
       const enviados = i === 0 ? borrados : [];
       await llamar({ action: 'guardar' }, { action: 'guardar', registros: payload, borrados: enviados });
       // Marca como sincronizados solo los que no se editaron mientras se enviaban.

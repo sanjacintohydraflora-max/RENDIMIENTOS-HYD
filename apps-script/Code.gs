@@ -159,7 +159,8 @@ function filas(desde, hasta) {
 
 function catalogos() {
   const e = leer('EMPLEADOS'), l = leer('LABORES'), c = leer('CAMAS');
-  const col = (t, n) => t.enc.indexOf(n);
+  // Acepta encabezados con o sin espacio ("LUGARDE TRABAJO" o "LUGAR DE TRABAJO").
+  const col = (t, n) => t.enc.map(h => String(h).replace(/\s+/g, '')).indexOf(n.replace(/\s+/g, ''));
   return {
     empleados: e.datos.filter(f => f[col(e, 'NOMBRE')] !== '').map(f => ({
       nombre: String(f[col(e, 'NOMBRE')]).trim(), estado: String(f[col(e, 'ESTADO')]).trim(),
