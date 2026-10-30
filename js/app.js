@@ -10,7 +10,7 @@
 
   const S = {
     empleados: [], empMap: {}, labores: [], camas: [], cfg: { ...Calc.CONFIG_BASE },
-    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null,
+    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null,
   };
 
   function toast(msg, ms = 2600) {
@@ -166,13 +166,14 @@
   }
 
   function pintarChips() {
+    pintarCadena();
     $('empChips').innerHTML = S.sel.map(c => {
       const e = S.empMap[c];
       return `<span class="chip">${esc(e ? e.nombre : c)}<button type="button" data-quitar="${esc(c)}" aria-label="Quitar">×</button></span>`;
     }).join('');
     $('empHint').textContent = S.sel.length > 1
       ? `Labor grupal: ${S.sel.length} personas. La cantidad se reparte en partes iguales.`
-      : 'Si la labor es grupal, agrega a todas las personas que participaron.';
+      : '';
     recalcular();
   }
 
@@ -334,15 +335,9 @@
     const c = Calc.calcular(reg, S.cfg, S.empMap);
     const unidad = c.tipo === 'tallos' ? 'tallos' : 'plantas';
     const desc = [c.desayuno && `desayuno ${fmt(c.desayuno, 2)}`, c.almuerzo && `almuerzo ${fmt(c.almuerzo, 2)}`, c.pausa && `pausa ${fmt(c.pausa, 2)}`].filter(Boolean).join(', ');
-    box.innerHTML = `<table>
-      <tr><td>Horas totales</td><td>${fmt(c.horasTotales, 2)} h</td></tr>
-      <tr><td>Descuentos</td><td>${desc || 'ninguno'}</td></tr>
-      <tr><td>Tiempo laborado por persona</td><td>${fmt(c.tiempoLab, 2)} h</td></tr>
-      ${c.tipo !== 'tiempo' ? `
-      <tr><td>Total ${unidad}${c.n > 1 ? ` (grupo de ${c.n})` : ''}</td><td>${fmt(c.total)}</td></tr>
-      ${c.n > 1 ? `<tr><td>${unidad[0].toUpperCase() + unidad.slice(1)} por persona</td><td>${fmt(c.porPersona, 1)}</td></tr>` : ''}
-      <tr><td class="big">Rendimiento por persona</td><td class="big">${fmt(c.rendimiento, 1)} ${unidad}/h</td></tr>` : ''}
-    </table>`;
+    const rend = c.tipo !== 'tiempo'
+      ? `<div class="calc-rend">${fmt(c.rendimiento, 1)} <small>${unidad}/h por persona</small></div>` : '';
+    box.innerHTML = `${rend}<div class="calc-line"><b>${fmt(c.tiempoLab, 2)} h</b> laboradas de ${fmt(c.horasTotales, 2)} h${desc ? ` · menos ${desc}` : ''}${c.tipo !== 'tiempo' ? ` · ${fmt(c.total)} ${unidad}${c.n > 1 ? ` entre ${c.n} (${fmt(c.porPersona, 1)} c/u)` : ''}` : ''}</div>`;
   }
 
   function limpiarFormulario(mantener = true) {
@@ -356,7 +351,7 @@
     $('editBanner').classList.add('hidden');
     $('saveBtn').textContent = 'Guardar registro';
     $('savePartial').classList.remove('hidden'); $('partialHint').classList.remove('hidden');
-    $('saveNext').classList.remove('hidden'); $('nextHint').classList.remove('hidden');
+    $('saveNext').classList.remove('hidden');
     $('formErr').textContent = '';
     pintarChips(); pintarTramos(); actualizarLabor(); pintarCamas(); aplicarDescuentosAuto();
     pintarAbiertos();
@@ -387,7 +382,7 @@
     $('editBanner').querySelector('.badge').textContent = abierto ? 'Terminando registro' : 'Editando registro';
     $('saveBtn').textContent = abierto ? 'Terminar registro' : 'Guardar cambios';
     $('savePartial').classList.toggle('hidden', !abierto); $('partialHint').classList.toggle('hidden', !abierto);
-    $('saveNext').classList.toggle('hidden', !abierto); $('nextHint').classList.toggle('hidden', !abierto);
+    $('saveNext').classList.toggle('hidden', !abierto);
     if (abierto && !r.horaFin) setTimeout(() => $('hFin').focus(), 50);
     pintarAbiertos();
     mostrar('registrar');
@@ -435,16 +430,57 @@
       : editando ? (S.editOriginal?.estado === 'abierto' ? 'Registro terminado' : 'Cambios guardados')
         : copias.length > 1 ? `Se registraron ${copias.length} días, del ${copias[0].fecha} al ${copias[copias.length - 1].fecha}`
           : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
-    const personas = S.sel.slice();
-    limpiarFormulario(seguir || (!editando && !parcial));
     // Varias labores seguidas de la misma persona: quedan las mismas personas y la hora de inicio es la de fin.
-    if (seguir) {
-      S.sel = personas; pintarChips();
-      toast(`Guardado. Sigue la próxima labor desde las ${$('hInicio').value}.`, 3500);
-      setTimeout(() => $('laborInput').focus(), 50);
+    if (seguir) S.cadena = S.sel.slice();
+    limpiarFormulario(seguir || (!editando && !parcial));
+    if (S.cadena) {
+      await continuarCadena();
+      if (seguir) toast(`Guardado. Sigue la próxima labor desde las ${$('hInicio').value}.`, 3500);
     }
     actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
+  }
+
+  // ---------- Labores del día de la persona que se está registrando ----------
+  async function registrosCadena() {
+    const ced = S.cadena || S.sel;
+    if (!ced.length || !$('fecha').value) return [];
+    return (await DB.registrosPorFecha($('fecha').value)).filter(r => r.empleados.some(c => ced.includes(c)))
+      .sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
+  }
+
+  async function pintarCadena() {
+    const regs = await registrosCadena();
+    $('cadenaCard').classList.toggle('hidden', !regs.length);
+    $('cadenaFin').classList.toggle('hidden', !S.cadena);
+    if (!regs.length) return;
+    const ced = S.cadena || S.sel;
+    const nombres = ced.map(c => S.empMap[c]?.nombre || c);
+    $('cadenaTitulo').textContent = `Hoy · ${nombres.length > 1 ? `${nombres.length} personas` : nombres[0]}`;
+    let total = 0;
+    $('cadenaLista').innerHTML = regs.map(r => {
+      const c = Calc.calcular(r, S.cfg, null);
+      total += c.tiempoLab;
+      const cant = c.tipo !== 'tiempo' && r.cantidad ? ` · ${fmt(r.cantidad)} ${c.tipo === 'tallos' ? 'tallos' : 'pl.'}` : '';
+      const lugar = Calc.tramosDe(r).map(t => `${t.bloque} L${t.lote}`).join(', ');
+      return `<div class="cad-item${r.id === S.editId ? ' on' : ''}">
+        <span class="cad-h">${esc(r.horaInicio)}–${esc(r.horaFin || '…')}</span>
+        <span class="cad-l"><b>${esc(r.labor)}</b><small>${fmt(c.tiempoLab, 2)} h${cant}${lugar ? ` · ${esc(lugar)}` : ''}</small></span>
+        ${r.id === S.editId ? '<span class="badge gr">Editando</span>' : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button>`}
+      </div>`;
+    }).join('');
+    const falta = S.cfg.jornada - total;
+    $('cadenaTotal').textContent = `${fmt(total, 2)} h laboradas${falta > 0.02 ? ` · faltan ${fmt(falta, 2)} h para la jornada` : ' · jornada completa'}`;
+  }
+
+  // Después de guardar o editar, vuelve a dejar las mismas personas desde la última hora de fin.
+  async function continuarCadena() {
+    S.sel = S.cadena.slice();
+    const fines = (await registrosCadena()).map(r => r.horaFin).filter(Boolean).sort();
+    if (fines.length) $('hInicio').value = fines[fines.length - 1];
+    $('hFin').value = '';
+    pintarChips(); aplicarDescuentosAuto(); recalcular();
+    setTimeout(() => $('laborInput').focus(), 50);
   }
 
   // ---------- Registros sin terminar ----------
@@ -526,7 +562,7 @@
     await DB.setMeta('borrados', b);
     toast('Registro borrado');
     if (S.editId === id) limpiarFormulario(false);
-    pintarHoy(); pintarAbiertos(); actualizarSyncPill();
+    pintarHoy(); pintarAbiertos(); pintarCadena(); actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
   }
 
@@ -770,7 +806,12 @@
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
-    $('cancelEdit').addEventListener('click', () => limpiarFormulario(false));
+    $('cancelEdit').addEventListener('click', () => { limpiarFormulario(false); if (S.cadena) continuarCadena(); });
+    $('cadenaFin').addEventListener('click', () => { S.cadena = null; limpiarFormulario(false); });
+    $('cadenaLista').addEventListener('click', ev => {
+      const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
+    });
+    $('fecha').addEventListener('change', pintarCadena);
 
     $('hoyFecha').addEventListener('change', pintarHoy);
     $('hoySync').addEventListener('click', async () => { const r = await Sync.sincronizar(); toast(r?.error ? `No se pudo sincronizar: ${r.error}` : 'Sincronización completa'); pintarHoy(); });

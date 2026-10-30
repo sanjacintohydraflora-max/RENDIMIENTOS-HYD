@@ -40,6 +40,11 @@
       <h2 style="color:var(--warn)">Registros sin terminar</h2>
       <div id="abiertosLista"></div>
     </div>
+    <div class="card hidden" id="cadenaCard">
+      <div class="cad-head"><h2 id="cadenaTitulo">Labores de hoy</h2><button type="button" class="btn small" id="cadenaFin">Otra persona</button></div>
+      <div id="cadenaLista"></div>
+      <div class="hint" id="cadenaTotal"></div>
+    </div>
     <form id="form" autocomplete="off" novalidate>
       <div class="card">
         <div id="editBanner" class="hidden" style="margin-bottom:12px">
@@ -81,7 +86,7 @@
           <input type="text" id="empInput" placeholder="Nombre, apellido o cédula">
           <div class="suggest hidden" id="empSuggest"></div>
           <div class="chips" id="empChips"></div>
-          <div class="hint" id="empHint">Si la labor es grupal, agrega a todas las personas que participaron.</div>
+          <div class="hint" id="empHint"></div>
         </div>
 
         <div class="row row-time">
@@ -102,7 +107,6 @@
             <label class="check"><input type="checkbox" id="dAlmuerzo"> Almuerzo <span class="hint" id="dAlmuerzoMin"></span></label>
             <label class="check"><input type="checkbox" id="dPausa"> Pausa <span class="hint" id="dPausaMin"></span></label>
           </div>
-          <div class="hint">Se marcan solos cuando el horario cruza la hora del desayuno o almuerzo.</div>
         </div>
       </div>
 
@@ -147,15 +151,15 @@
       </div>
 
       <div class="card">
-        <h2>Resultado</h2>
         <div class="calc" id="calc"><div class="empty" style="padding:8px">Completa la labor, las personas y el horario.</div></div>
         <div id="formErr" class="err"></div>
         <div style="margin-top:14px">
           <button type="submit" class="btn primary block" id="saveBtn">Guardar registro</button>
-          <button type="button" class="btn block" id="saveNext" style="margin-top:10px">Guardar y seguir con otra labor</button>
-          <div class="hint" id="nextHint" style="text-align:center">Guarda esta labor y deja las mismas personas, empezando a la hora en que terminó.</div>
-          <button type="button" class="btn block" id="savePartial" style="margin-top:10px">Guardar sin terminar (completar después)</button>
-          <div class="hint" id="partialHint" style="text-align:center">Solo pide labor, personas y hora de inicio. Debes terminarlo antes de registrar otro día.</div>
+          <div class="save-row">
+            <button type="button" class="btn" id="saveNext">Guardar y otra labor</button>
+            <button type="button" class="btn" id="savePartial">Guardar sin terminar</button>
+          </div>
+          <div class="hint" id="partialHint" style="text-align:center"><b>Otra labor:</b> sigue con las mismas personas. <b>Sin terminar:</b> lo completas después, antes de otro día.</div>
         </div>
       </div>
     </form>
