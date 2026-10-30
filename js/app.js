@@ -10,7 +10,7 @@
 
   const S = {
     empleados: [], empMap: {}, labores: [], camas: [], cfg: { ...Calc.CONFIG_BASE },
-    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null, verAbiertos: false,
+    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null, verAbiertos: false, diaPendiente: null,
   };
 
   function toast(msg, ms = 2600) {
@@ -406,12 +406,18 @@
     if ($('fechaHasta').value && $('fechaHasta').value < reg.fecha && dias.length <= 1) errores.push('La fecha final del rango es anterior a la fecha inicial.');
     if (!dias.length) errores.push('El rango no tiene días hábiles.');
     // No se empieza otro día mientras queden registros sin terminar de días anteriores.
-    const pendientes = todos.filter(r => r.estado === 'abierto' && r.id !== reg.id && r.fecha < reg.fecha);
+    const pdFecha = !S.editId && dias.length ? Calc.pendientesDelDia(todos, dias[0], S.cfg, reg.id).fecha : null;
+    const pendientes = todos.filter(r => r.estado === 'abierto' && r.id !== reg.id && r.fecha < reg.fecha && r.fecha !== pdFecha);
     if (pendientes.length) {
       const dias = [...new Set(pendientes.map(r => r.fecha))].join(', ');
       errores.unshift(`Tienes ${pendientes.length} registro(s) sin terminar del ${dias}. Termínalos antes de registrar el ${reg.fecha}.`);
     }
     const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
+    // Todas las personas del último día registrado deben quedar completas antes de empezar otro día.
+    if (!S.editId && dias.length) {
+      const pd = Calc.pendientesDelDia(todos, dias[0], S.cfg, reg.id);
+      if (pd.personas.length) errores.unshift(`El ${fechaCorta(pd.fecha)} quedó incompleto para ${pd.personas.length} persona(s): ${pd.personas.map(p => nombre(p.ced)).slice(0, 4).join(', ')}${pd.personas.length > 4 ? '…' : ''}. Termínalo (aviso de arriba) antes de registrar el ${fechaCorta(dias[0])}.`);
+    }
     const copias = dias.map((f, i) => (i === 0 ? Object.assign(reg, { fecha: f }) : { ...reg, id: uid(), fecha: f }));
     // Al empezar un día nuevo, el último día de cada persona debe tener la jornada completa.
     if (!S.editId && copias.length) errores.push(...Calc.diaIncompleto(copias[0], todos, S.cfg, nombre));
@@ -488,10 +494,40 @@
   // ---------- Registros sin terminar ----------
   // Sin persona elegida solo se muestra el conteo (se puede abrir la lista). Con persona elegida se
   // muestran sus pendientes de otros días; los del mismo día salen en "Hoy" junto a sus otras labores.
+  const fechaCorta = f => (f ? f.split('-').reverse().join('/') : '');
+
+  // Aviso del día anterior incompleto: quién no completó la jornada o dejó labores sin terminar.
+  async function pintarDia(regs) {
+    const pd = S.editId ? { personas: [] } : Calc.pendientesDelDia(regs, hoyStr(), S.cfg);
+    $('diaCard').classList.toggle('hidden', !pd.personas.length);
+    S.diaPendiente = pd.personas.length ? pd.fecha : null;
+    if (!pd.personas.length) return;
+    $('diaTitulo').textContent = `Día ${fechaCorta(pd.fecha)} incompleto · ${pd.personas.length} persona${pd.personas.length > 1 ? 's' : ''}`;
+    $('diaLista').innerHTML = pd.personas.map(p => `<div class="cad-item">
+        <span class="cad-l"><b>${esc(S.empMap[p.ced]?.nombre || p.nombre)}</b>
+        <small>${p.abiertos.length ? `<span class="flag-low">${p.abiertos.length} sin terminar</span> · ` : ''}${fmt(p.horas, 2)} h de ${fmt(p.meta, 2)}${p.horas < p.meta ? ` · faltan ${fmt(p.meta - p.horas, 2)} h` : ''}</small></span>
+        <button type="button" class="btn small primary" data-dia-ced="${esc(p.ced)}">Completar</button>
+      </div>`).join('');
+  }
+
+  // Lleva el formulario al día pendiente con esa persona elegida.
+  async function completarDia(ced) {
+    limpiarFormulario(false);
+    $('fecha').value = S.diaPendiente;
+    S.cadena = [ced]; S.volverHoy = true;
+    await continuarCadena();
+    const abierto = (await registrosCadena()).find(r => r.estado === 'abierto');
+    if (abierto) cargarEnFormulario(abierto.id);
+    window.scrollTo(0, 0);
+  }
+
   async function pintarAbiertos() {
-    const todos = (await DB.allRegistros()).filter(r => r.estado === 'abierto' && r.id !== S.editId)
-      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio));
+    const regs = await DB.allRegistros();
+    await pintarDia(regs);
     const ced = S.cadena || S.sel;
+    // Los del día pendiente ya salen en su propio aviso.
+    const todos = regs.filter(r => r.estado === 'abierto' && r.id !== S.editId && (ced.length || r.fecha !== S.diaPendiente))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio));
     const conPersona = ced.length > 0;
     const abiertos = conPersona ? todos.filter(r => r.fecha !== $('fecha').value && r.empleados.some(c => ced.includes(c))) : todos;
     $('abiertosCard').classList.toggle('hidden', !abiertos.length);
@@ -825,10 +861,17 @@
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
     $('cancelEdit').addEventListener('click', () => { limpiarFormulario(false); if (S.cadena) continuarCadena(); });
-    $('cadenaFin').addEventListener('click', () => { S.cadena = null; limpiarFormulario(false); });
+    $('cadenaFin').addEventListener('click', () => {
+      S.cadena = null; limpiarFormulario(false);
+      // Si se estaba completando el día anterior, vuelve a la fecha de hoy.
+      if (S.volverHoy) { S.volverHoy = false; $('fecha').value = hoyStr(); pintarAbiertos(); }
+    });
     $('cadenaLista').addEventListener('click', ev => {
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
+    });
+    $('diaLista').addEventListener('click', ev => {
+      const b = ev.target.closest('[data-dia-ced]'); if (b) completarDia(b.dataset.diaCed);
     });
     $('abiertosVer').addEventListener('click', () => { S.verAbiertos = !S.verAbiertos; pintarAbiertos(); });
     $('fecha').addEventListener('change', () => { pintarCadena(); pintarAbiertos(); });

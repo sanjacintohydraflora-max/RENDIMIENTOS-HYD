@@ -36,6 +36,11 @@
 
   <!-- REGISTRAR -->
   <main id="view-registrar">
+    <div class="card hidden" id="diaCard" style="border-color:var(--bad)">
+      <h2 style="color:var(--bad)" id="diaTitulo"></h2>
+      <div class="hint" style="margin:-4px 0 6px">Termina estas personas antes de registrar un día nuevo.</div>
+      <div id="diaLista"></div>
+    </div>
     <div class="card hidden" id="abiertosCard" style="border-color:var(--warn)">
       <div class="cad-head"><h2 style="color:var(--warn)" id="abiertosTitulo">Registros sin terminar</h2><button type="button" class="btn small hidden" id="abiertosVer">Ver</button></div>
       <div id="abiertosLista"></div>

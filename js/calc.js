@@ -221,6 +221,28 @@ const Calc = (() => {
     return msgs;
   }
 
+  // Último día con registros antes de `antesDe`: personas que no completaron la jornada o que
+  // tienen labores sin terminar. Bloquea registrar un día nuevo hasta que se completen.
+  function pendientesDelDia(todos, antesDe, cfg, excluir = null) {
+    const previos = todos.filter(o => o.id !== excluir && o.fecha < antesDe);
+    if (!previos.length) return { fecha: null, personas: [] };
+    const fecha = previos.reduce((m, o) => (o.fecha > m ? o.fecha : m), '');
+    const delDia = previos.filter(o => o.fecha === fecha);
+    const [y, m, d] = fecha.split('-').map(Number);
+    const sabado = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
+    const meta = Number(sabado ? cfg.jornadaSabado ?? cfg.jornada : cfg.jornada) || 0;
+    const ceds = [...new Set(delDia.flatMap(o => o.empleados))];
+    const personas = ceds.map(c => {
+      const suyos = delDia.filter(o => o.empleados.includes(c));
+      const abiertos = suyos.filter(o => o.estado === 'abierto');
+      const horas = suyos.filter(o => o.estado !== 'abierto').reduce((s, o) => s + calcular(o, cfg, null).tiempoLab, 0);
+      const porDias = suyos.some(o => esPorDias(o.labor));
+      const nombre = suyos.find(o => o.nombres?.[c])?.nombres[c] || c;
+      return { ced: c, nombre, horas: r2(horas), meta, abiertos, completo: !abiertos.length && (porDias || meta <= 0 || horas >= meta - 0.02) };
+    }).filter(p => !p.completo);
+    return { fecha, personas };
+  }
+
   // Busca empleados por cualquier parte del nombre o cédula. Todas las palabras deben coincidir.
   function buscar(lista, q, campo = 'nombre', extra = []) {
     const toks = norm(q).split(/\s+/).filter(Boolean);
@@ -231,6 +253,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, diaIncompleto, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, diaIncompleto, pendientesDelDia, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;
