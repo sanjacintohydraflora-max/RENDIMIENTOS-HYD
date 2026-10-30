@@ -10,7 +10,7 @@
 
   const S = {
     empleados: [], empMap: {}, labores: [], camas: [], cfg: { ...Calc.CONFIG_BASE },
-    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null,
+    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null, verAbiertos: false,
   };
 
   function toast(msg, ms = 2600) {
@@ -166,7 +166,7 @@
   }
 
   function pintarChips() {
-    pintarCadena();
+    pintarCadena(); pintarAbiertos();
     $('empChips').innerHTML = S.sel.map(c => {
       const e = S.empMap[c];
       return `<span class="chip">${esc(e ? e.nombre : c)}<button type="button" data-quitar="${esc(c)}" aria-label="Quitar">×</button></span>`;
@@ -426,7 +426,7 @@
     await DB.putRegistros(copias);
     if (reg.lider) await DB.setMeta('lider', reg.lider);
     const editando = !!S.editId;
-    toast(parcial ? 'Guardado sin terminar. Lo completas desde el aviso de arriba o en Registros.'
+    toast(parcial ? 'Guardado sin terminar. Aparece arriba cuando eliges a esa persona.'
       : editando ? (S.editOriginal?.estado === 'abierto' ? 'Registro terminado' : 'Cambios guardados')
         : copias.length > 1 ? `Se registraron ${copias.length} días, del ${copias[0].fecha} al ${copias[copias.length - 1].fecha}`
           : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
@@ -465,8 +465,10 @@
       const lugar = Calc.tramosDe(r).map(t => `${t.bloque} L${t.lote}`).join(', ');
       return `<div class="cad-item${r.id === S.editId ? ' on' : ''}">
         <span class="cad-h">${esc(r.horaInicio)}–${esc(r.horaFin || '…')}</span>
-        <span class="cad-l"><b>${esc(r.labor)}</b><small>${fmt(c.tiempoLab, 2)} h${cant}${lugar ? ` · ${esc(lugar)}` : ''}</small></span>
-        ${r.id === S.editId ? '<span class="badge gr">Editando</span>' : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button>`}
+        <span class="cad-l"><b>${esc(r.labor)}</b><small>${r.estado === 'abierto' ? '<span class="flag-low">sin terminar</span>' : `${fmt(c.tiempoLab, 2)} h`}${cant}${lugar ? ` · ${esc(lugar)}` : ''}</small></span>
+        ${r.id === S.editId ? '<span class="badge gr">Editando</span>'
+          : r.estado === 'abierto' ? `<button type="button" class="btn small primary" data-editar="${r.id}">Completar</button><button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>`
+            : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button>`}
       </div>`;
     }).join('');
     const falta = S.cfg.jornada - total;
@@ -484,17 +486,33 @@
   }
 
   // ---------- Registros sin terminar ----------
+  // Sin persona elegida solo se muestra el conteo (se puede abrir la lista). Con persona elegida se
+  // muestran sus pendientes de otros días; los del mismo día salen en "Hoy" junto a sus otras labores.
   async function pintarAbiertos() {
-    const abiertos = (await DB.allRegistros()).filter(r => r.estado === 'abierto' && r.id !== S.editId)
+    const todos = (await DB.allRegistros()).filter(r => r.estado === 'abierto' && r.id !== S.editId)
       .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio));
+    const ced = S.cadena || S.sel;
+    const conPersona = ced.length > 0;
+    const abiertos = conPersona ? todos.filter(r => r.fecha !== $('fecha').value && r.empleados.some(c => ced.includes(c))) : todos;
     $('abiertosCard').classList.toggle('hidden', !abiertos.length);
-    $('abiertosLista').innerHTML = abiertos.map(r => {
+    if (!abiertos.length) return;
+    const personas = new Set(abiertos.flatMap(r => r.empleados)).size;
+    $('abiertosTitulo').textContent = conPersona
+      ? `Sin terminar de otros días (${abiertos.length})`
+      : `Sin terminar: ${abiertos.length} registro${abiertos.length > 1 ? 's' : ''} de ${personas} persona${personas > 1 ? 's' : ''}`;
+    const abierta = conPersona || S.verAbiertos;
+    $('abiertosVer').classList.toggle('hidden', conPersona);
+    $('abiertosVer').textContent = S.verAbiertos ? 'Ocultar' : 'Ver';
+    $('abiertosLista').classList.toggle('hidden', !abierta);
+    $('abiertosLista').innerHTML = !abierta ? '' : abiertos.map(r => {
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
-      const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}${x.camas?.length ? ` camas ${Calc.formatCamas(x.camas)}` : ''}`).join(' · ');
-      return `<div class="reg"><div class="r-main"><div class="r-t">${esc(r.labor)}</div><div class="r-s">${esc(nombres)}</div>
-        <div class="r-s">${esc(r.fecha)} desde las ${esc(r.horaInicio)}${t ? ` · ${esc(t)}` : ''}</div></div>
-        <div class="r-a"><button type="button" class="btn small primary" data-editar="${r.id}">Completar</button>
-          <button type="button" class="btn small danger" data-borrar="${r.id}">Eliminar</button></div></div>`;
+      const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}`).join(', ');
+      return `<div class="cad-item">
+        <span class="cad-h">${esc(r.fecha.slice(5).split('-').reverse().join('/'))} ${esc(r.horaInicio)}</span>
+        <span class="cad-l"><b>${esc(conPersona ? r.labor : nombres)}</b><small>${esc(conPersona ? t : r.labor + (t ? ` · ${t}` : ''))}</small></span>
+        <button type="button" class="btn small primary" data-editar="${r.id}">Completar</button>
+        <button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>
+      </div>`;
     }).join('');
   }
 
@@ -810,8 +828,10 @@
     $('cadenaFin').addEventListener('click', () => { S.cadena = null; limpiarFormulario(false); });
     $('cadenaLista').addEventListener('click', ev => {
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
+      const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
-    $('fecha').addEventListener('change', pintarCadena);
+    $('abiertosVer').addEventListener('click', () => { S.verAbiertos = !S.verAbiertos; pintarAbiertos(); });
+    $('fecha').addEventListener('change', () => { pintarCadena(); pintarAbiertos(); });
 
     $('hoyFecha').addEventListener('change', pintarHoy);
     $('hoySync').addEventListener('click', async () => { const r = await Sync.sincronizar(); toast(r?.error ? `No se pudo sincronizar: ${r.error}` : 'Sincronización completa'); pintarHoy(); });
