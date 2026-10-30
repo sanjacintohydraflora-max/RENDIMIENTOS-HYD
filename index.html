@@ -332,6 +332,13 @@
       <div class="btn-row">
         <button type="button" class="btn" id="exportLocal">Descargar Excel de este celular</button>
       </div>
+      <h3 style="margin-top:18px">Borrar registros de prueba</h3>
+      <div class="row">
+        <div class="field"><label class="f" for="limpiarHasta">Borrar hasta el día</label><input type="date" id="limpiarHasta"></div>
+        <div class="field" style="display:flex;align-items:flex-end"><label class="check" style="width:100%"><input type="checkbox" id="limpiarHoja" checked> También de la hoja</label></div>
+      </div>
+      <button type="button" class="btn danger" id="limpiarBtn">Borrar registros de este celular</button>
+      <p class="hint">Borra los registros de este celular con fecha hasta ese día, de todas las áreas. Con "También de la hoja" sus filas se borran de la hoja de Google al sincronizar. No se puede deshacer.</p>
     </div>
   </main>
 

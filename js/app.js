@@ -1052,6 +1052,20 @@
       catch { $('shareLink').select(); document.execCommand('copy'); toast('Enlace copiado'); }
     });
     $('shareSend').addEventListener('click', () => navigator.share({ title: 'Rendimientos Hydraflora', text: 'Abre este enlace para conectar la app de rendimientos:', url: $('shareLink').value }).catch(() => {}));
+    $('limpiarBtn').addEventListener('click', async () => {
+      const hasta = $('limpiarHasta').value;
+      if (!hasta) { toast('Elige hasta qué día borrar.'); return; }
+      const regs = (await DB.allRegistros()).filter(r => r.fecha <= hasta);
+      if (!regs.length) { toast('No hay registros hasta ese día en este celular.'); return; }
+      const sinEnviar = regs.filter(r => !r.sincronizado && r.estado !== 'abierto').length;
+      const hoja = $('limpiarHoja').checked;
+      if (!confirm(`¿Borrar ${regs.length} registros de este celular con fecha hasta el ${fechaCorta(hasta)}?${hoja ? ' También se borrarán de la hoja de Google al sincronizar.' : ''}${sinEnviar ? ` ${sinEnviar} todavía no se habían enviado a la hoja.` : ''} No se puede deshacer.`)) return;
+      for (const r of regs) await DB.deleteRegistro(r.id);
+      if (hoja) await DB.setMeta('borrados', [...new Set([...(await DB.getMeta('borrados', [])), ...regs.map(r => r.id)])]);
+      toast(`${regs.length} registros borrados de este celular.`, 4000);
+      limpiarFormulario(false); pintarAjustes(); actualizarSyncPill();
+      if (hoja) Sync.sincronizar({ catalogos: false });
+    });
     $('exportLocal').addEventListener('click', async () => descargarExcel(await filasLocales(), `rendimientos-celular-${hoyStr()}.xlsx`));
 
     Sync.onCambio(st => { actualizarSyncPill(st); if (st.tipo !== 'sincronizando') cargarCatalogos(); });
