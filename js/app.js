@@ -67,12 +67,25 @@
     const sede = Calc.areaInfo(S.area).sede;
     S.camas = sede ? S.camasTodas.filter(c => Calc.sedeCama(c) === sede) : [];
   }
-  const delArea = r => (r.area || Calc.AREA_BASE) === S.area;
-  const laborDelArea = nombre => S.labores.find(l => l.nombre === nombre && Calc.laborEnArea(l, S.area));
+  const areaReg = r => Calc.AREA_ANTES[r.area] || r.area || Calc.AREA_BASE;
+  const delArea = r => areaReg(r) === S.area;
+  // Horario del área elegida y de un registro (cada área tiene el suyo).
+  const cfgA = () => Calc.cfgDe(S.cfg, S.area);
+  const cfgReg = r => Calc.cfgDe(S.cfg, areaReg(r));
+  // Sin plano (Manzanares) las labores en plantas se registran solo por tiempo.
+  const ajustarLabor = l => (!Calc.tienePlano(S.area) && Calc.tipoMedida(l.medida) === 'plantas' ? { ...l, medida: 'Tiempo' } : l);
+  const laboresDelArea = () => S.labores.filter(l => Calc.laborEnArea(l, S.area)).map(ajustarLabor);
+  const laborDelArea = nombre => laboresDelArea().find(l => l.nombre === nombre);
+  // Entrada y salida del área para una fecha (o las del lunes si ese día no hay horario).
+  const horarioFecha = f => (f && Calc.horarioDia(cfgA(), f)) || cfgA().dias?.[1] || ['06:15', '15:30'];
 
+  const titulo = t => t.toLowerCase().replace(/(^|\s)\S/g, x => x.toUpperCase());
   function pintarInicio() {
-    $('areasLista').innerHTML = Calc.AREAS.map(a => `<button type="button" class="area-btn${a.id === S.area ? ' on' : ''}" data-area="${a.id}">
-      <b>${esc(a.grupo === 'CULTIVO' ? 'Cultivo' : a.id[0] + a.id.slice(1).toLowerCase())}</b>${a.sede ? `<small>${esc(a.sede === 'LA CEJA' ? 'La Ceja' : 'San Jacinto')}</small>` : ''}</button>`).join('');
+    $('areasLista').innerHTML = Calc.AREAS.map(a => {
+      const resto = a.id.slice(a.grupo.length).trim();
+      return `<button type="button" class="area-btn${a.id === S.area ? ' on' : ''}" data-area="${a.id}">
+      <b>${esc(titulo(a.grupo))}</b>${resto ? `<small>${esc(titulo(resto))}</small>` : ''}</button>`;
+    }).join('');
   }
 
   async function elegirArea(area) {
@@ -84,7 +97,8 @@
     filtrarCamas();
     $('bloque').value = ''; llenarBloques();
     $('areaActual').textContent = area;
-    $('zonaCultivo').classList.toggle('hidden', !Calc.esCultivo(area));
+    $('zonaCultivo').classList.toggle('hidden', !Calc.tienePlano(area));
+    pintarMinutosDescuento();
     limpiarFormulario(false);
     mostrar('registrar');
   }
@@ -140,7 +154,7 @@
   }
 
   function buscarLabores(q) {
-    const lista = S.labores.filter(l => Calc.laborEnArea(l, S.area));
+    const lista = laboresDelArea();
     if (!Calc.norm(q)) return lista;
     return Calc.buscar(lista, q, 'nombre');
   }
@@ -162,7 +176,7 @@
     const l = S.labor;
     const tipo = l ? Calc.tipoMedida(l.medida) : 'tiempo';
     $('laborInfo').innerHTML = l
-      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : Calc.esCultivo(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
+      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : Calc.tienePlano(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
       : '';
     const reqPl = tipo === 'plantas';
     ['bloqueLbl', 'loteLbl', 'camasLbl'].forEach(id => $(id).classList.toggle('req', reqPl));
@@ -174,8 +188,7 @@
     const porDias = !!l && Calc.esPorDias(l.nombre) && !S.editId;
     $('rangoField').classList.toggle('hidden', !porDias);
     if (porDias) {
-      $('hInicio').value = S.cfg.jornadaInicio;
-      $('hFin').value = S.cfg.jornadaFin;
+      [$('hInicio').value, $('hFin').value] = horarioFecha($('fecha').value);
       aplicarDescuentosAuto();
       pintarRango();
     } else $('fechaHasta').value = '';
@@ -192,7 +205,7 @@
   function pintarRango() {
     const dias = diasRango();
     $('rangoHint').textContent = $('fechaHasta').value && $('fechaHasta').value > $('fecha').value
-      ? `Se crearán ${dias.length} registros, uno por día hábil (${$('rangoSabados').checked ? 'lunes a sábado' : 'lunes a viernes'}), de ${$('hInicio').value || S.cfg.jornadaInicio} a ${$('hFin').value || S.cfg.jornadaFin}.`
+      ? `Se crearán ${dias.length} registros, uno por día hábil (${$('rangoSabados').checked ? 'lunes a sábado' : 'lunes a viernes'}), con el horario de cada día del área.`
       : 'Para varios días, pon el último día. Si es un solo día, déjalo vacío.';
   }
 
@@ -320,17 +333,18 @@
   }
 
   function aplicarDescuentosAuto() {
-    const d = Calc.descuentosAuto($('hInicio').value, $('hFin').value, S.cfg);
+    const d = Calc.descuentosAuto($('hInicio').value, $('hFin').value, cfgA());
     $('dDesayuno').checked = d.desayuno;
     $('dAlmuerzo').checked = d.almuerzo;
     $('dPausa').checked = d.pausa;
   }
 
   function pintarMinutosDescuento() {
-    $('dDesayunoMin').textContent = `${S.cfg.desayunoMin} min`;
-    $('dAlmuerzoMin').textContent = `${S.cfg.almuerzoMin} min`;
-    $('dPausaMin').textContent = `${S.cfg.pausaMin} min`;
-    $('dPausa').closest('.check').classList.toggle('hidden', !(S.cfg.pausaMin > 0));
+    const c = cfgA();
+    $('dDesayunoMin').textContent = `${c.desayunoMin} min`;
+    $('dAlmuerzoMin').textContent = `${c.almuerzoMin} min`;
+    $('dPausaMin').textContent = `${c.pausaMin} min`;
+    $('dPausa').closest('.check').classList.toggle('hidden', !(c.pausaMin > 0));
   }
 
   function leerFormulario() {
@@ -353,7 +367,7 @@
       obs: $('obs').value.trim(),
     };
     // Vacaciones, incapacidades y ausencias: jornada completa con desayuno, almuerzo y pausa descontados.
-    if (S.labor && Calc.esPorDias(S.labor.nombre)) Object.assign(reg, { desayuno: true, almuerzo: true, pausa: true, pausaMin: S.cfg.pausaDiasMin });
+    if (S.labor && Calc.esPorDias(S.labor.nombre)) Object.assign(reg, { desayuno: true, almuerzo: true, pausa: true });
     return reg;
   }
 
@@ -364,7 +378,7 @@
       box.innerHTML = `<div class="empty" style="padding:8px">${reg.horaInicio && !reg.horaFin ? 'Sin hora de fin: puedes guardarlo sin terminar y completarlo después.' : 'Completa la labor, las personas y el horario.'}</div>`;
       return;
     }
-    const c = Calc.calcular(reg, S.cfg, S.empMap);
+    const c = Calc.calcular(reg, cfgA(), S.empMap);
     const unidad = c.tipo === 'tiempo' ? 'plantas' : c.tipo;
     const desc = [c.desayuno && `desayuno ${fmt(c.desayuno, 2)}`, c.almuerzo && `almuerzo ${fmt(c.almuerzo, 2)}`, c.pausa && `pausa ${fmt(c.pausa, 2)}`].filter(Boolean).join(', ');
     const rend = c.tipo !== 'tiempo'
@@ -431,7 +445,7 @@
     const reg = leerFormulario();
     reg.estado = parcial ? 'abierto' : 'completo';
     if (parcial) reg.horaFin = '';
-    const errores = Calc.validar(reg, S.cfg, { parcial });
+    const errores = Calc.validar(reg, cfgA(), { parcial });
     if ($('laborInput').value && !S.labor) errores.unshift('La labor escrita no está en la lista; elígela de las sugerencias.');
     const todos = await DB.allRegistros();
     const dias = !parcial && !S.editId && S.labor && Calc.esPorDias(S.labor.nombre) ? diasRango() : [reg.fecha];
@@ -441,10 +455,12 @@
     const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
     // Mientras haya un día incompleto (antes o después), no se escribe en otra fecha.
     if (!S.editId && dias.length) {
-      const bloq = Calc.diasQueBloquean(todos.filter(delArea), dias[0], S.cfg, reg.id);
+      const bloq = Calc.diasQueBloquean(todos.filter(delArea), dias[0], cfgA(), reg.id);
       if (bloq.length) errores.unshift(`Hay ${bloq.length > 1 ? 'días incompletos' : 'un día incompleto'}: ${bloq.map(d => `${fechaCorta(d.fecha)} (${d.personas.length} persona${d.personas.length > 1 ? 's' : ''})`).join(', ')}. Complétalo desde el aviso de arriba antes de registrar el ${fechaCorta(dias[0])}.`);
     }
     const copias = dias.map((f, i) => (i === 0 ? Object.assign(reg, { fecha: f }) : { ...reg, id: uid(), fecha: f }));
+    // Un rango de vacaciones o incapacidad toma la entrada y salida de cada día según el horario del área.
+    if (copias.length > 1) copias.forEach(cp => { [cp.horaInicio, cp.horaFin] = horarioFecha(cp.fecha); });
     copias.forEach(cp => errores.push(...Calc.cruces(cp, todos, nombre).map(m => (copias.length > 1 ? `${cp.fecha}: ${m}` : m))));
     if (errores.length) { $('formErr').innerHTML = [...new Set(errores)].map(esc).join('<br>'); return; }
     const ahora = new Date().toISOString();
@@ -489,7 +505,7 @@
     $('cadenaTitulo').textContent = `Hoy · ${nombres.length > 1 ? `${nombres.length} personas` : nombres[0]}`;
     let total = 0;
     $('cadenaLista').innerHTML = regs.map(r => {
-      const c = Calc.calcular(r, S.cfg, null);
+      const c = Calc.calcular(r, cfgA(), null);
       total += c.tiempoLab;
       const cant = c.tipo !== 'tiempo' && r.cantidad ? ` · ${fmt(r.cantidad)} ${c.tipo === 'plantas' ? 'pl.' : c.tipo}` : '';
       const lugar = Calc.tramosDe(r).map(t => `${t.bloque} L${t.lote}`).join(', ');
@@ -501,8 +517,9 @@
             : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button>`}
       </div>`;
     }).join('');
-    const falta = S.cfg.jornada - total;
-    $('cadenaTotal').textContent = `${fmt(total, 2)} h laboradas${falta > 0.02 ? ` · faltan ${fmt(falta, 2)} h para la jornada` : ' · jornada completa'}`;
+    const jornada = Calc.jornadaDia(cfgA(), $('fecha').value);
+    const falta = jornada - total;
+    $('cadenaTotal').textContent = `${fmt(total, 2)} h laboradas${!jornada ? '' : falta > 0.02 ? ` · faltan ${fmt(falta, 2)} h para la jornada de ${fmt(jornada, 2)} h` : ' · jornada completa'}`;
   }
 
   // Después de guardar o editar, vuelve a dejar las mismas personas desde la última hora de fin.
@@ -522,7 +539,7 @@
 
   // Aviso del día anterior incompleto: quién no completó la jornada o dejó labores sin terminar.
   async function pintarDia(regs) {
-    const bloq = S.editId ? [] : Calc.diasQueBloquean(regs, $('fecha').value || hoyStr(), S.cfg);
+    const bloq = S.editId ? [] : Calc.diasQueBloquean(regs, $('fecha').value || hoyStr(), cfgA());
     $('diaCard').classList.toggle('hidden', !bloq.length);
     S.diaPendiente = bloq.length ? bloq[0].fecha : null;
     // Bloquea la escritura: solo se puede cambiar la fecha o completar desde el aviso.
@@ -593,7 +610,7 @@
       return;
     }
     lista.innerHTML = regs.map(r => {
-      const c = Calc.calcular(r, S.cfg, S.empMap);
+      const c = Calc.calcular(r, cfgReg(r), S.empMap);
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
       const unidad = c.tipo === 'tiempo' ? 'plantas' : c.tipo;
       const abierto = r.estado === 'abierto';
@@ -620,7 +637,7 @@
     // Horas por persona y cruces de horario
     const porPersona = {};
     regs.forEach(r => {
-      const c = Calc.calcular(r, S.cfg, S.empMap);
+      const c = Calc.calcular(r, cfgReg(r), S.empMap);
       r.empleados.forEach(ced => {
         const p = porPersona[ced] ||= { nombre: S.empMap[ced]?.nombre || r.nombres?.[ced] || ced, horas: 0, tramos: [] };
         p.horas += c.tiempoLab;
@@ -628,14 +645,15 @@
         else p.tramos.push([Calc.minutos(r.horaInicio), Calc.minutos(r.horaFin)]);
       });
     });
+    const jornada = Calc.jornadaDia(cfgA(), f);
     const filas = Object.values(porPersona).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(p => {
       p.tramos.sort((a, b) => a[0] - b[0]);
       const cruce = p.tramos.some((t, i) => i > 0 && t[0] < p.tramos[i - 1][1]);
-      const bajo = p.horas < S.cfg.jornada - 0.25;
-      const nota = p.abierto ? '<span class="flag-low">Labor sin terminar</span>' : cruce ? '<span class="flag-high">Horarios cruzados</span>' : bajo ? `<span class="flag-low">Faltan ${fmt(S.cfg.jornada - p.horas, 2)} h</span>` : 'Completo';
+      const bajo = jornada > 0 && p.horas < jornada - 0.02;
+      const nota = p.abierto ? '<span class="flag-low">Labor sin terminar</span>' : cruce ? '<span class="flag-high">Horarios cruzados</span>' : bajo ? `<span class="flag-low">Faltan ${fmt(jornada - p.horas, 2)} h</span>` : 'Completo';
       return `<tr><td>${esc(p.nombre)}</td><td class="n">${fmt(p.horas, 2)}</td><td>${nota}</td></tr>`;
     }).join('');
-    $('hoyHoras').innerHTML = `<div class="table-scroll"><table class="hours-table"><thead><tr><th>Persona</th><th class="n">Horas lab.</th><th>Revisión (jornada ${fmt(S.cfg.jornada, 2)} h)</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+    $('hoyHoras').innerHTML = `<div class="table-scroll"><table class="hours-table"><thead><tr><th>Persona</th><th class="n">Horas lab.</th><th>Revisión (jornada ${jornada ? `${fmt(jornada, 2)} h` : 'sin horario ese día'})</th></tr></thead><tbody>${filas}</tbody></table></div>`;
   }
 
   async function borrar(id) {
@@ -756,14 +774,8 @@
       return cs.length ? `${new Set(cs.map(c => c[0])).size} bloques, ${fmt(cs.length)} camas, ${fmt(cs.reduce((s, c) => s + c[3], 0))} plantas` : 'sin cargar';
     };
     $('catStatus').textContent = `${S.labores.length} labores de todas las áreas. Plano San Jacinto: ${plano('SAN JACINTO')}. Plano La Ceja: ${plano('LA CEJA')}.`;
-    const c = S.cfg;
-    $('cDesH').value = c.desayunoHora; $('cDesM').value = c.desayunoMin;
-    $('cAlmH').value = c.almuerzoHora; $('cAlmM').value = c.almuerzoMin;
-    $('cPauH').value = c.pausaHora; $('cPauM').value = c.pausaMin;
-    $('cPauDiasM').value = c.pausaDiasMin ?? 10;
-    $('cJornada').value = c.jornada;
-    $('cJornadaSab').value = c.jornadaSabado ?? c.jornada;
-    $('cJorIni').value = c.jornadaInicio || '06:15'; $('cJorFin').value = c.jornadaFin || '15:30';
+    $('cHorario').value = Calc.areaInfo(S.area).horario || 'GENERAL';
+    pintarHorario();
     const s = await DB.getMeta('sync', { url: '', key: '' });
     $('cUrl').value = s.url; $('cKey').value = s.key;
     const regs = await DB.allRegistros();
@@ -775,7 +787,7 @@
 
   async function filasLocales() {
     const regs = (await DB.allRegistros()).filter(r => r.estado !== 'abierto');
-    return regs.flatMap(r => Calc.calcular(r, S.cfg, S.empMap).filas);
+    return regs.flatMap(r => Calc.calcular(r, cfgReg(r), S.empMap).filas);
   }
 
   function descargarExcel(filas, nombre) {
@@ -789,9 +801,9 @@
   // Se usa una vez cuando una corrección cambia lo que se manda a la hoja.
   // Los registros de antes del módulo de áreas son del cultivo San Jacinto; se reenvían con su área.
   async function areaRegistrosViejos() {
-    const viejos = (await DB.allRegistros()).filter(r => !r.area);
+    const viejos = (await DB.allRegistros()).filter(r => !r.area || Calc.AREA_ANTES[r.area]);
     if (!viejos.length) return;
-    viejos.forEach(r => { r.area = Calc.AREA_BASE; if (r.estado !== 'abierto') r.sincronizado = false; });
+    viejos.forEach(r => { r.area = Calc.AREA_ANTES[r.area] || Calc.AREA_BASE; if (r.estado !== 'abierto') r.sincronizado = false; });
     await DB.putRegistros(viejos);
   }
 
@@ -844,6 +856,46 @@
     return true;
   }
 
+  // ---------- Horarios por área (Ajustes) ----------
+  const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  function leerHorario() {
+    const dias = {};
+    for (let d = 1; d <= 6; d++) {
+      const a = $(`cDia${d}i`).value, b = $(`cDia${d}f`).value;
+      if (a && b && b > a) dias[d] = [a, b];
+    }
+    return {
+      desayunoHora: $('cDesH').value || '08:30', desayunoMin: Number($('cDesM').value) || 0,
+      almuerzoHora: $('cAlmH').value || '12:00', almuerzoMin: Number($('cAlmM').value) || 0,
+      pausaHora: $('cPauH').value || '10:00', pausaMin: Number($('cPauM').value) || 0,
+      dias,
+    };
+  }
+
+  // Muestra el horario elegido; con `vivo` solo recalcula las horas productivas mientras se edita.
+  function pintarHorario(vivo = false) {
+    const k = $('cHorario').value;
+    const h = vivo ? { ...S.cfg, ...Calc.HORARIOS[k], ...leerHorario() } : { ...Calc.HORARIOS[k], ...(S.cfg.horarios?.[k] || {}) };
+    if (!vivo) {
+      $('cDesH').value = h.desayunoHora; $('cDesM').value = h.desayunoMin;
+      $('cAlmH').value = h.almuerzoHora; $('cAlmM').value = h.almuerzoMin;
+      $('cPauH').value = h.pausaHora; $('cPauM').value = h.pausaMin;
+      $('cDias').innerHTML = DIAS.slice(1).map((n, i) => `<tr><td>${n}</td>
+        <td><input type="time" id="cDia${i + 1}i" value="${h.dias[i + 1]?.[0] || ''}"></td>
+        <td><input type="time" id="cDia${i + 1}f" value="${h.dias[i + 1]?.[1] || ''}"></td>
+        <td class="n" id="cDia${i + 1}h"></td></tr>`).join('');
+    }
+    const cfg = { ...S.cfg, ...h };
+    let total = 0;
+    for (let d = 1; d <= 6; d++) {
+      const dia = h.dias[d];
+      const horas = dia ? Calc.r2(Calc.calcular({ horaInicio: dia[0], horaFin: dia[1], ...Calc.descuentosAuto(dia[0], dia[1], cfg), empleados: [] }, cfg, null).tiempoLab) : 0;
+      total += horas;
+      $(`cDia${d}h`).textContent = dia ? fmt(horas, 2) : '—';
+    }
+    $('cHorarioTotal').textContent = `Horas productivas en la semana: ${fmt(total, 2)} h. Áreas: ${Calc.AREAS.filter(a => a.horario === k).map(a => titulo(a.id)).join(', ')}.`;
+  }
+
   // ---------- Navegación ----------
   function mostrar(vista) {
     if (vista === 'registrar' && !S.area) vista = 'inicio';
@@ -852,7 +904,7 @@
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === vista));
     if (vista === 'hoy') pintarHoy();
     if (vista === 'ajustes') pintarAjustes();
-    if (vista === 'dashboard') Dashboard.abrir({ filasLocales, empMap: () => S.empMap, camas: () => S.camasTodas, area: () => S.area, cfg: () => S.cfg, descargarExcel, toast });
+    if (vista === 'dashboard') Dashboard.abrir({ filasLocales, empMap: () => S.empMap, camas: () => S.camasTodas, area: () => S.area, jornada: (area, fecha) => Calc.jornadaDia(Calc.cfgDe(S.cfg, area), fecha), descargarExcel, toast });
     if (vista !== 'inicio') try { localStorage.setItem('vista', vista); } catch { /* sin almacenamiento */ }
   }
 
@@ -969,19 +1021,21 @@
 
     ['fecha', 'fechaHasta', 'rangoSabados', 'hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', pintarRango));
 
+    $('cHorario').addEventListener('change', () => pintarHorario());
+    $('horarioForm').addEventListener('input', () => pintarHorario(true));
     $('saveCfg').addEventListener('click', async () => {
-      S.cfg = {
-        desayunoHora: $('cDesH').value || '08:30', desayunoMin: Number($('cDesM').value) || 0,
-        almuerzoHora: $('cAlmH').value || '12:00', almuerzoMin: Number($('cAlmM').value) || 0,
-        pausaHora: $('cPauH').value || '10:00', pausaMin: Number($('cPauM').value) || 0,
-        pausaDiasMin: Number($('cPauDiasM').value) || 0, pausa10: true,
-        jornada: Number($('cJornada').value) || 8.23,
-        jornadaSabado: $('cJornadaSab').value === '' ? Number($('cJornada').value) || 8.23 : Number($('cJornadaSab').value),
-        jornadaInicio: $('cJorIni').value || '06:15', jornadaFin: $('cJorFin').value || '15:30',
-      };
+      const k = $('cHorario').value;
+      S.cfg.horarios = { ...(S.cfg.horarios || {}), [k]: leerHorario() };
       await DB.setMeta('config', S.cfg);
-      pintarMinutosDescuento();
+      pintarMinutosDescuento(); recalcular(); pintarAbiertos();
       toast('Horario guardado. Aplica a los registros nuevos y a los que edites.');
+    });
+    $('resetCfg').addEventListener('click', async () => {
+      const k = $('cHorario').value;
+      if (S.cfg.horarios) delete S.cfg.horarios[k];
+      await DB.setMeta('config', S.cfg);
+      pintarHorario(); pintarMinutosDescuento(); recalcular(); pintarAbiertos();
+      toast('Horario restaurado.');
     });
     $('saveSync').addEventListener('click', async () => {
       await DB.setMeta('sync', { url: $('cUrl').value.trim(), key: $('cKey').value.trim() });
@@ -1027,9 +1081,10 @@
     $('hoyFecha').value = hoyStr();
     $('lider').value = await DB.getMeta('lider', '');
     S.area = await DB.getMeta('area', '');
+    S.area = Calc.AREA_ANTES[S.area] || S.area;
     filtrarCamas(); llenarBloques();
     $('areaActual').textContent = S.area;
-    $('zonaCultivo').classList.toggle('hidden', !Calc.esCultivo(S.area));
+    $('zonaCultivo').classList.toggle('hidden', !Calc.tienePlano(S.area));
     pintarMinutosDescuento();
     limpiarFormulario(false);
     actualizarSyncPill();

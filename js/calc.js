@@ -13,16 +13,50 @@ const Calc = (() => {
   ];
 
   // Áreas de la empresa. Los dos cultivos comparten labores pero cada uno tiene su plano de producción.
+  // Manzanares no tiene plano: sus labores en plantas se registran solo por tiempo.
   const AREAS = [
-    { id: 'CULTIVO SAN JACINTO', grupo: 'CULTIVO', sede: 'SAN JACINTO' },
-    { id: 'CULTIVO LA CEJA', grupo: 'CULTIVO', sede: 'LA CEJA' },
-    { id: 'POSCOSECHA', grupo: 'POSCOSECHA' },
-    { id: 'TINTAS', grupo: 'TINTAS' },
-    { id: 'COMERCIALIZADORA', grupo: 'COMERCIALIZADORA' },
+    { id: 'CULTIVO SAN JACINTO', grupo: 'CULTIVO', sede: 'SAN JACINTO', horario: 'GENERAL' },
+    { id: 'CULTIVO LA CEJA', grupo: 'CULTIVO', sede: 'LA CEJA', horario: 'GENERAL' },
+    { id: 'CULTIVO MANZANARES', grupo: 'CULTIVO', horario: 'GENERAL' },
+    { id: 'POSCOSECHA SAN JACINTO', grupo: 'POSCOSECHA', horario: 'GENERAL' },
+    { id: 'POSCOSECHA LA CEJA', grupo: 'POSCOSECHA', horario: 'CORTO' },
+    { id: 'TINTAS', grupo: 'TINTAS', horario: 'CORTO' },
+    { id: 'COMERCIALIZADORA', grupo: 'COMERCIALIZADORA', horario: 'CORTO' },
   ];
   const AREA_BASE = 'CULTIVO SAN JACINTO';
-  const areaInfo = id => AREAS.find(a => a.id === id) || { id, grupo: id };
+  // Nombres de la primera versión del módulo de áreas.
+  const AREA_ANTES = { POSCOSECHA: 'POSCOSECHA SAN JACINTO' };
+  const areaInfo = id => AREAS.find(a => a.id === (AREA_ANTES[id] || id)) || { id, grupo: id, horario: 'GENERAL' };
+
+  // Horarios por área (días 1 = lunes … 6 = sábado). La jornada esperada de cada día se calcula
+  // con la entrada, la salida y los descuentos que caen dentro.
+  const HORARIOS = {
+    GENERAL: {
+      nombre: 'Cultivos y Poscosecha San Jacinto',
+      desayunoHora: '08:30', desayunoMin: 26, almuerzoHora: '12:00', almuerzoMin: 25, pausaHora: '10:00', pausaMin: 10,
+      dias: { 1: ['06:15', '15:30'], 2: ['06:15', '15:30'], 3: ['06:15', '15:30'], 4: ['06:15', '15:30'], 5: ['06:15', '15:30'] },
+    },
+    CORTO: {
+      nombre: 'Comercializadora, Tintas y Poscosecha La Ceja',
+      desayunoHora: '09:00', desayunoMin: 20, almuerzoHora: '12:00', almuerzoMin: 20, pausaHora: '10:00', pausaMin: 10,
+      dias: { 1: ['07:00', '15:00'], 2: ['07:00', '16:00'], 3: ['07:00', '16:20'], 4: ['07:00', '16:30'], 5: ['07:00', '16:30'] },
+    },
+  };
+  // Configuración con el horario del área (los cambios hechos en Ajustes van en cfg.horarios).
+  function cfgDe(cfg, area) {
+    const k = areaInfo(area).horario || 'GENERAL';
+    return { ...cfg, ...HORARIOS[k], ...(cfg.horarios?.[k] || {}), horarioId: k };
+  }
+  const diaSemana = fecha => { const [y, m, d] = fecha.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); };
+  const horarioDia = (cfgArea, fecha) => cfgArea.dias?.[diaSemana(fecha)] || null;
+  // Horas productivas esperadas ese día; 0 si el área no trabaja ese día (no se revisa).
+  function jornadaDia(cfgArea, fecha) {
+    const h = horarioDia(cfgArea, fecha);
+    if (!h) return 0;
+    return r2(calcular({ horaInicio: h[0], horaFin: h[1], ...descuentosAuto(h[0], h[1], cfgArea), empleados: [] }, cfgArea, null).tiempoLab);
+  }
   const esCultivo = id => areaInfo(id).grupo === 'CULTIVO';
+  const tienePlano = id => !!areaInfo(id).sede;
   // Labores sin área (catálogo anterior) son de cultivo; TODAS aplica a cualquier área.
   const laborEnArea = (l, area) => { const a = norm(l.area) || 'CULTIVO'; return a === 'TODAS' || a === areaInfo(area).grupo; };
   // Camas del plano: [bloque, lote, cama, plantas, variedad, sede]; las del plano anterior son de San Jacinto.
@@ -241,9 +275,7 @@ const Calc = (() => {
 
   // Personas que no completaron la jornada de un día o que dejaron labores sin terminar.
   function incompletosDelDia(delDia, fecha, cfg) {
-    const [y, m, d] = fecha.split('-').map(Number);
-    const sabado = new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
-    const meta = Number(sabado ? cfg.jornadaSabado ?? cfg.jornada : cfg.jornada) || 0;
+    const meta = jornadaDia(cfg, fecha);
     const ceds = [...new Set(delDia.flatMap(o => o.empleados))];
     return ceds.map(c => {
       const suyos = delDia.filter(o => o.empleados.includes(c));
@@ -276,6 +308,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, AREAS, AREA_BASE, areaInfo, esCultivo, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

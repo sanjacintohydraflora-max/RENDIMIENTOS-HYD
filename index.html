@@ -271,7 +271,12 @@
       <p class="hint">Labores: hoja con AREA EN LA QUE APLICA, LABORES y MEDIDA. Plano: hoja DATA con BLOQUE, LOTE, ERA, CANTIDAD DE PLANTAS, VARIEDAD; carga uno para cada cultivo.</p>
     </div>
     <div class="card">
-      <h2>Horario y descuentos</h2>
+      <h2>Horarios por área</h2>
+      <div class="field"><label class="f" for="cHorario">Horario</label>
+        <select id="cHorario"><option value="GENERAL">Cultivos y Poscosecha San Jacinto</option><option value="CORTO">Comercializadora, Tintas y Poscosecha La Ceja</option></select></div>
+      <div id="horarioForm">
+      <div class="table-scroll"><table class="hours-table horario-tabla"><thead><tr><th>Día</th><th>Entrada</th><th>Salida</th><th class="n">Horas prod.</th></tr></thead><tbody id="cDias"></tbody></table></div>
+      <div class="hint" style="margin:4px 0 12px">Deja vacío un día que no se trabaja (no se revisa la jornada ese día).</div>
       <div class="row3">
         <div class="field"><label class="f" for="cDesH">Hora desayuno</label><input type="time" id="cDesH"></div>
         <div class="field"><label class="f" for="cDesM">Minutos</label><input type="number" id="cDesM" min="0"></div>
@@ -280,15 +285,12 @@
         <div class="field"><label class="f" for="cPauH">Hora pausa</label><input type="time" id="cPauH"></div>
         <div class="field"><label class="f" for="cPauM">Minutos (0 = no aplica)</label><input type="number" id="cPauM" min="0"></div>
       </div>
-      <div class="row">
-        <div class="field"><label class="f" for="cJorIni">Entrada (vacaciones e incapacidades)</label><input type="time" id="cJorIni"></div>
-        <div class="field"><label class="f" for="cJorFin">Salida</label><input type="time" id="cJorFin"></div>
       </div>
-      <div class="field"><label class="f" for="cPauDiasM">Pausa en vacaciones e incapacidades (min)</label><input type="number" id="cPauDiasM" min="0"></div>
-      <div class="field"><label class="f" for="cJornada">Horas productivas esperadas por día</label><input type="number" id="cJornada" step="0.01" min="0"></div>
-      <div class="field"><label class="f" for="cJornadaSab">Horas esperadas el sábado (0 = no revisar)</label><input type="number" id="cJornadaSab" step="0.01" min="0"></div>
-      <div class="hint" style="margin:-6px 0 14px">No deja empezar un día nuevo si el último día de algún trabajador tiene menos horas que estas.</div>
+      <p class="hint" id="cHorarioTotal"></p>
+      <div class="btn-row">
       <button type="button" class="btn" id="saveCfg">Guardar horario</button>
+      <button type="button" class="btn" id="resetCfg">Restaurar</button>
+      </div>
     </div>
     <div class="card">
       <h2>Sincronización</h2>

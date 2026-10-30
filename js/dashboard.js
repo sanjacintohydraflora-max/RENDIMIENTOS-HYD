@@ -99,7 +99,7 @@ const Dashboard = (() => {
 
   const tipo = f => Calc.tipoMedida(f.MEDIDA);
   // Las filas de antes del módulo de áreas eran todas del cultivo San Jacinto.
-  const areaDe = f => f.AREA || Calc.AREA_BASE;
+  const areaDe = f => Calc.AREA_ANTES[f.AREA] || f.AREA || Calc.AREA_BASE;
   const liderDe = f => String(f.LIDER || '').trim().toUpperCase();
   // La columna se llamó LUGARDE TRABAJO en la primera versión de la hoja.
   const lugar = f => f['LUGAR DE TRABAJO'] ?? f['LUGARDE TRABAJO'] ?? '';
@@ -277,35 +277,37 @@ const Dashboard = (() => {
   }
 
   function revision(filas) {
-    const jornada = ctx.cfg().jornada;
     const dias = [...new Set(filas.map(f => f.FECHA))].sort();
     const g = {};
     filas.forEach(f => {
-      const p = g[f.CEDULA] ||= { nombre: f.NOMBRE, d: {} };
+      const p = g[f.CEDULA] ||= { nombre: f.NOMBRE, d: {}, a: {} };
+      p.a[f.FECHA] ||= areaDe(f);
       p.d[f.FECHA] = (p.d[f.FECHA] || 0) + Number(f['TIEMPO LAB'] || 0);
     });
     const personas = Object.values(g).sort((a, b) => a.nombre.localeCompare(b.nombre));
     if (!personas.length || dias.length > 31) {
-      $('cRevision').innerHTML = encabezado('Revisión de horas por día', `Horas laboradas por persona y día frente a la jornada de ${fmt(jornada, 2)} h.`) +
+      $('cRevision').innerHTML = encabezado('Revisión de horas por día', `Horas laboradas por persona y día frente a la jornada de su área.`) +
         `<div class="empty">${personas.length ? 'Elige un rango de 31 días o menos para ver la revisión diaria.' : 'Sin datos en este filtro.'}</div>`;
       return;
     }
-    const celda = h => {
+    // La jornada esperada depende del horario del área y del día de la semana.
+    const celda = (h, area, fecha) => {
       if (!h) return '<td class="c" style="color:var(--text-3)">·</td>';
-      const bajo = h < jornada - 0.25, alto = h > jornada + 1;
+      const jornada = ctx.jornada(area, fecha);
+      const bajo = jornada > 0 && h < jornada - 0.02, alto = jornada > 0 && h > jornada + 1;
       const st = bajo ? 'background:var(--warn-soft);color:var(--warn);font-weight:600' : alto ? 'background:var(--bad-soft);color:var(--bad);font-weight:600' : '';
       return `<td class="c" style="${st}" title="${fmt(h, 2)} h${bajo ? ' · incompleto' : alto ? ' · excede la jornada' : ''}">${fmt(h, 1)}${bajo ? '↓' : alto ? '↑' : ''}</td>`;
     };
     const dsem = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
-    $('cRevision').innerHTML = encabezado('Revisión de horas por día', `Horas laboradas por persona y día. Jornada esperada ${fmt(jornada, 2)} h.`) +
+    $('cRevision').innerHTML = encabezado('Revisión de horas por día', `Horas laboradas por persona y día. La jornada esperada es la del horario de cada área para ese día.`) +
       `<div class="legend"><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>↓ Menos de la jornada</span><span><i style="background:var(--bad-soft);border:1px solid var(--bad)"></i>↑ Más de una hora extra</span></div>
       <div class="table-scroll"><table class="hours-table heat"><thead><tr><th>Persona</th>${dias.map(d => `<th class="n" style="text-align:center">${dsem[new Date(`${d}T12:00`).getDay()]} ${d.slice(8)}</th>`).join('')}<th class="n">Total</th></tr></thead>
-      <tbody>${personas.map(p => `<tr><td style="white-space:nowrap">${esc(corto(p.nombre, 28))}</td>${dias.map(d => celda(p.d[d])).join('')}<td class="n"><b>${fmt(Object.values(p.d).reduce((a, b) => a + b, 0), 1)}</b></td></tr>`).join('')}</tbody></table></div>`;
+      <tbody>${personas.map(p => `<tr><td style="white-space:nowrap">${esc(corto(p.nombre, 28))}</td>${dias.map(d => celda(p.d[d], p.a[d], d)).join('')}<td class="n"><b>${fmt(Object.values(p.d).reduce((a, b) => a + b, 0), 1)}</b></td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function bloques(filas) {
     // Cada cultivo tiene su plano: se usa el del área filtrada o, si no hay filtro, el del área de este celular.
-    const area = Calc.esCultivo($('fArea').value) ? $('fArea').value : Calc.esCultivo(ctx.area()) ? ctx.area() : Calc.AREA_BASE;
+    const area = Calc.tienePlano($('fArea').value) ? $('fArea').value : Calc.tienePlano(ctx.area()) ? ctx.area() : Calc.AREA_BASE;
     const sede = Calc.areaInfo(area).sede;
     const camas = ctx.camas().filter(c => Calc.sedeCama(c) === sede);
     const fl = filas.filter(f => tipo(f) === 'plantas' && f.BLOQUE && areaDe(f) === area);
