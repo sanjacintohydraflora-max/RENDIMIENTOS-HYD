@@ -323,3 +323,7 @@ svg.chart .axis { stroke: var(--border); }
   #view-registrar .chip { padding: 4px 4px 4px 10px; font-size: 13px; }
   #view-registrar .camas-grid button, #view-registrar .cama { min-height: 38px; }
 }
+form.bloqueado .card { opacity: .5; }
+form.bloqueado .card:first-child { opacity: 1; }
+.dia-sub { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 8px; }
+form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(--surface-2); color: var(--text-3); }

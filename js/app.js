@@ -406,21 +406,13 @@
     if ($('fechaHasta').value && $('fechaHasta').value < reg.fecha && dias.length <= 1) errores.push('La fecha final del rango es anterior a la fecha inicial.');
     if (!dias.length) errores.push('El rango no tiene días hábiles.');
     // No se empieza otro día mientras queden registros sin terminar de días anteriores.
-    const pdFecha = !S.editId && dias.length ? Calc.pendientesDelDia(todos, dias[0], S.cfg, reg.id).fecha : null;
-    const pendientes = todos.filter(r => r.estado === 'abierto' && r.id !== reg.id && r.fecha < reg.fecha && r.fecha !== pdFecha);
-    if (pendientes.length) {
-      const dias = [...new Set(pendientes.map(r => r.fecha))].join(', ');
-      errores.unshift(`Tienes ${pendientes.length} registro(s) sin terminar del ${dias}. Termínalos antes de registrar el ${reg.fecha}.`);
-    }
     const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
-    // Todas las personas del último día registrado deben quedar completas antes de empezar otro día.
+    // Mientras haya un día incompleto (antes o después), no se escribe en otra fecha.
     if (!S.editId && dias.length) {
-      const pd = Calc.pendientesDelDia(todos, dias[0], S.cfg, reg.id);
-      if (pd.personas.length) errores.unshift(`El ${fechaCorta(pd.fecha)} quedó incompleto para ${pd.personas.length} persona(s): ${pd.personas.map(p => nombre(p.ced)).slice(0, 4).join(', ')}${pd.personas.length > 4 ? '…' : ''}. Termínalo (aviso de arriba) antes de registrar el ${fechaCorta(dias[0])}.`);
+      const bloq = Calc.diasQueBloquean(todos, dias[0], S.cfg, reg.id);
+      if (bloq.length) errores.unshift(`Hay ${bloq.length > 1 ? 'días incompletos' : 'un día incompleto'}: ${bloq.map(d => `${fechaCorta(d.fecha)} (${d.personas.length} persona${d.personas.length > 1 ? 's' : ''})`).join(', ')}. Complétalo desde el aviso de arriba antes de registrar el ${fechaCorta(dias[0])}.`);
     }
     const copias = dias.map((f, i) => (i === 0 ? Object.assign(reg, { fecha: f }) : { ...reg, id: uid(), fecha: f }));
-    // Al empezar un día nuevo, el último día de cada persona debe tener la jornada completa.
-    if (!S.editId && copias.length) errores.push(...Calc.diaIncompleto(copias[0], todos, S.cfg, nombre));
     copias.forEach(cp => errores.push(...Calc.cruces(cp, todos, nombre).map(m => (copias.length > 1 ? `${cp.fecha}: ${m}` : m))));
     if (errores.length) { $('formErr').innerHTML = [...new Set(errores)].map(esc).join('<br>'); return; }
     const ahora = new Date().toISOString();
@@ -498,25 +490,30 @@
 
   // Aviso del día anterior incompleto: quién no completó la jornada o dejó labores sin terminar.
   async function pintarDia(regs) {
-    const pd = S.editId ? { personas: [] } : Calc.pendientesDelDia(regs, S.volverA || $('fecha').value || hoyStr(), S.cfg);
-    $('diaCard').classList.toggle('hidden', !pd.personas.length);
-    S.diaPendiente = pd.personas.length ? pd.fecha : null;
-    if (!pd.personas.length) return;
-    $('diaTitulo').textContent = `Día ${fechaCorta(pd.fecha)} incompleto · ${pd.personas.length} persona${pd.personas.length > 1 ? 's' : ''}`;
-    $('diaLista').innerHTML = pd.personas.map(p => `<div class="cad-item">
+    const bloq = S.editId ? [] : Calc.diasQueBloquean(regs, $('fecha').value || hoyStr(), S.cfg);
+    $('diaCard').classList.toggle('hidden', !bloq.length);
+    S.diaPendiente = bloq.length ? bloq[0].fecha : null;
+    // Bloquea la escritura: solo se puede cambiar la fecha o completar desde el aviso.
+    $('form').classList.toggle('bloqueado', !!bloq.length);
+    $('form').querySelectorAll('input, select, textarea, button').forEach(el => { if (el.id !== 'fecha') el.disabled = !!bloq.length; });
+    if (!bloq.length) return;
+    const n = bloq.reduce((s, d) => s + d.personas.length, 0);
+    $('diaTitulo').textContent = bloq.length > 1 ? `${bloq.length} días incompletos · ${n} pendientes` : `Día ${fechaCorta(bloq[0].fecha)} incompleto · ${n} persona${n > 1 ? 's' : ''}`;
+    $('diaLista').innerHTML = bloq.map((d, i) => `${bloq.length > 1 ? `<div class="dia-sub">${fechaCorta(d.fecha)}</div>` : ''}${d.personas.map(p => `<div class="cad-item">
         <span class="cad-l"><b>${esc(S.empMap[p.ced]?.nombre || p.nombre)}</b>
         <small>${p.abiertos.length ? `<span class="flag-low">${p.abiertos.length} sin terminar</span> · ` : ''}${fmt(p.horas, 2)} h de ${fmt(p.meta, 2)}${p.horas < p.meta ? ` · faltan ${fmt(p.meta - p.horas, 2)} h` : ''}</small></span>
-        <button type="button" class="btn small primary" data-dia-ced="${esc(p.ced)}">Completar</button>
-      </div>`).join('');
+        ${i === 0 ? `<button type="button" class="btn small primary" data-dia-ced="${esc(p.ced)}" data-dia-fecha="${d.fecha}">Completar</button>` : ''}
+      </div>`).join('')}`).join('');
   }
 
   // Lleva el formulario al día pendiente con esa persona elegida.
-  async function completarDia(ced) {
+  async function completarDia(ced, fecha) {
     S.volverA = S.volverA || $('fecha').value || hoyStr();
     limpiarFormulario(false);
-    $('fecha').value = S.diaPendiente;
+    $('fecha').value = fecha;
     S.cadena = [ced];
     await continuarCadena();
+    await pintarAbiertos();
     const abierto = (await registrosCadena()).find(r => r.estado === 'abierto');
     if (abierto) cargarEnFormulario(abierto.id);
     window.scrollTo(0, 0);
@@ -872,7 +869,7 @@
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
     $('diaLista').addEventListener('click', ev => {
-      const b = ev.target.closest('[data-dia-ced]'); if (b) completarDia(b.dataset.diaCed);
+      const b = ev.target.closest('[data-dia-ced]'); if (b) completarDia(b.dataset.diaCed, b.dataset.diaFecha);
     });
     $('abiertosVer').addEventListener('click', () => { S.verAbiertos = !S.verAbiertos; pintarAbiertos(); });
     $('fecha').addEventListener('change', () => { pintarCadena(); pintarAbiertos(); });
