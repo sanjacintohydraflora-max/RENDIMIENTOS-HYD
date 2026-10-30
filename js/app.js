@@ -498,7 +498,7 @@
 
   // Aviso del día anterior incompleto: quién no completó la jornada o dejó labores sin terminar.
   async function pintarDia(regs) {
-    const pd = S.editId ? { personas: [] } : Calc.pendientesDelDia(regs, hoyStr(), S.cfg);
+    const pd = S.editId ? { personas: [] } : Calc.pendientesDelDia(regs, S.volverA || $('fecha').value || hoyStr(), S.cfg);
     $('diaCard').classList.toggle('hidden', !pd.personas.length);
     S.diaPendiente = pd.personas.length ? pd.fecha : null;
     if (!pd.personas.length) return;
@@ -512,9 +512,10 @@
 
   // Lleva el formulario al día pendiente con esa persona elegida.
   async function completarDia(ced) {
+    S.volverA = S.volverA || $('fecha').value || hoyStr();
     limpiarFormulario(false);
     $('fecha').value = S.diaPendiente;
-    S.cadena = [ced]; S.volverHoy = true;
+    S.cadena = [ced];
     await continuarCadena();
     const abierto = (await registrosCadena()).find(r => r.estado === 'abierto');
     if (abierto) cargarEnFormulario(abierto.id);
@@ -863,8 +864,8 @@
     $('cancelEdit').addEventListener('click', () => { limpiarFormulario(false); if (S.cadena) continuarCadena(); });
     $('cadenaFin').addEventListener('click', () => {
       S.cadena = null; limpiarFormulario(false);
-      // Si se estaba completando el día anterior, vuelve a la fecha de hoy.
-      if (S.volverHoy) { S.volverHoy = false; $('fecha').value = hoyStr(); pintarAbiertos(); }
+      // Si se estaba completando un día pendiente, vuelve a la fecha que se iba a registrar.
+      if (S.volverA) { $('fecha').value = S.volverA; S.volverA = null; pintarAbiertos(); }
     });
     $('cadenaLista').addEventListener('click', ev => {
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
