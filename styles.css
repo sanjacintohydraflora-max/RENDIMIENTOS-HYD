@@ -327,3 +327,17 @@ form.bloqueado .card { opacity: .5; }
 form.bloqueado .card:first-child { opacity: 1; }
 .dia-sub { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 8px; }
 form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(--surface-2); color: var(--text-3); }
+
+/* Inicio: elegir área */
+.areas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.area-btn {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
+  min-height: 72px; padding: 12px 14px; border-radius: 12px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
+}
+.area-btn b { font-size: 17px; font-weight: 650; }
+.area-btn small { font-size: 13px; color: var(--text-2); }
+.area-btn.on { border: 2px solid var(--brand); background: var(--brand-soft); }
+.area-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 10px; font-size: 14px; color: var(--text-2); }
+.area-bar b { color: var(--brand); }
+.area-bar .btn.small { min-height: 32px; padding: 4px 12px; }

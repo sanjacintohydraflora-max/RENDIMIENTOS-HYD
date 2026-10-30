@@ -6,11 +6,27 @@
 // bloques/lotes ("tramos"), cada tramo es una fila y el tiempo se reparte según sus plantas.
 const Calc = (() => {
   const COLUMNAS = [
-    'AÑO', 'MES', 'SEM', 'FECHA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
+    'AÑO', 'MES', 'SEM', 'FECHA', 'AREA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
     'HRA INICIO', 'HRA FIN', 'HORAS TOTALES', 'DESAYUNO', 'PAUSAS', 'ALMUERZO', 'TIEMPO LAB',
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
     'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO',
   ];
+
+  // Áreas de la empresa. Los dos cultivos comparten labores pero cada uno tiene su plano de producción.
+  const AREAS = [
+    { id: 'CULTIVO SAN JACINTO', grupo: 'CULTIVO', sede: 'SAN JACINTO' },
+    { id: 'CULTIVO LA CEJA', grupo: 'CULTIVO', sede: 'LA CEJA' },
+    { id: 'POSCOSECHA', grupo: 'POSCOSECHA' },
+    { id: 'TINTAS', grupo: 'TINTAS' },
+    { id: 'COMERCIALIZADORA', grupo: 'COMERCIALIZADORA' },
+  ];
+  const AREA_BASE = 'CULTIVO SAN JACINTO';
+  const areaInfo = id => AREAS.find(a => a.id === id) || { id, grupo: id };
+  const esCultivo = id => areaInfo(id).grupo === 'CULTIVO';
+  // Labores sin área (catálogo anterior) son de cultivo; TODAS aplica a cualquier área.
+  const laborEnArea = (l, area) => { const a = norm(l.area) || 'CULTIVO'; return a === 'TODAS' || a === areaInfo(area).grupo; };
+  // Camas del plano: [bloque, lote, cama, plantas, variedad, sede]; las del plano anterior son de San Jacinto.
+  const sedeCama = c => c[5] || 'SAN JACINTO';
 
   // Registros antiguos guardaban un solo bloque/lote; los nuevos traen la lista `tramos`.
   function tramosDe(reg) {
@@ -43,6 +59,7 @@ const Calc = (() => {
     const m = norm(medida);
     if (m.startsWith('PLANTA')) return 'plantas';
     if (m.startsWith('TALLO')) return 'tallos';
+    if (m.startsWith('UNIDAD')) return 'unidades';
     return 'tiempo';
   }
   // Labores que cubren días completos y se pueden registrar por rango de fechas.
@@ -138,7 +155,7 @@ const Calc = (() => {
       const e = (empleados && empleados[ced]) || { nombre: reg.nombres?.[ced] || ced, cedula: ced };
       const w = peso(t);
       return {
-        'AÑO': y, 'MES': m, 'SEM': reg.fecha ? semanaISO(reg.fecha) : '', 'FECHA': reg.fecha,
+        'AÑO': y, 'MES': m, 'SEM': reg.fecha ? semanaISO(reg.fecha) : '', 'FECHA': reg.fecha, 'AREA': reg.area || '',
         'LUGAR DE TRABAJO': e.lugar || '', 'ESTADO': e.estado || '', 'NOMBRE': e.nombre, 'CEDULA': String(ced),
         'LABOR': reg.labor, 'HRA INICIO': reg.horaInicio, 'HRA FIN': reg.horaFin,
         'HORAS TOTALES': r2(horasTotales * w), 'DESAYUNO': r2(desayuno * w), 'PAUSAS': r2(pausa * w), 'ALMUERZO': r2(almuerzo * w),
@@ -175,6 +192,7 @@ const Calc = (() => {
       if (!(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en plantas: el número de plantas es obligatorio.');
     }
     if (tipo === 'tallos' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en tallos: digita los tallos.');
+    if (tipo === 'unidades' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en unidades: digita las unidades.');
     if (cfg && a != null && b != null && b > a) {
       const c = calcular(reg, cfg, null);
       if (c.tiempoLab <= 0) e.push('Con los descuentos marcados el tiempo laborado queda en cero.');
@@ -258,6 +276,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { COLUMNAS, AREAS, AREA_BASE, areaInfo, esCultivo, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

@@ -10,7 +10,7 @@
 
   const S = {
     empleados: [], empMap: {}, labores: [], camas: [], cfg: { ...Calc.CONFIG_BASE },
-    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, cadena: null, verAbiertos: false, diaPendiente: null,
+    sel: [], labor: null, camasSel: new Set(), tramos: [], editId: null, cantManual: false, editOriginal: null, area: '', camasTodas: [], cadena: null, verAbiertos: false, diaPendiente: null,
   };
 
   function toast(msg, ms = 2600) {
@@ -37,16 +37,18 @@
     }
     S.cfg = { ...Calc.CONFIG_BASE, ...guardada };
     S.labores = await DB.getMeta('labores', []);
-    if (!S.labores.length) {
+    // El catálogo anterior no tenía áreas: se cambia por el de todas las áreas.
+    if (!S.labores.some(l => l.area)) {
       S.labores = (await cargarJSON('data/labores.json')) || [];
       if (S.labores.length) await DB.setMeta('labores', S.labores);
     }
-    S.camas = await DB.getMeta('camas', []);
-    if (!S.camas.length) {
+    S.camasTodas = await DB.getMeta('camas', []);
+    if (!S.camasTodas.length) {
       const c = await cargarJSON('data/camas.json');
-      S.camas = c?.camas || [];
-      if (S.camas.length) await DB.setMeta('camas', S.camas);
+      S.camasTodas = c?.camas || [];
+      if (S.camasTodas.length) await DB.setMeta('camas', S.camasTodas);
     }
+    filtrarCamas();
     S.empleados = await DB.getMeta('empleados', []);
     if (!S.empleados.length) {
       // Solo existe en copias de prueba; en producción la lista llega del servidor o del Excel.
@@ -57,6 +59,34 @@
     S.empleados.forEach(e => { if (e.lugar === 'undefined') e.lugar = ''; });
     S.empMap = Object.fromEntries(S.empleados.map(e => [String(e.cedula), e]));
     llenarBloques();
+  }
+
+  // ---------- Área ----------
+  // Cada cultivo usa su plano; poscosecha, tintas y comercializadora no llevan bloque ni lote.
+  function filtrarCamas() {
+    const sede = Calc.areaInfo(S.area).sede;
+    S.camas = sede ? S.camasTodas.filter(c => Calc.sedeCama(c) === sede) : [];
+  }
+  const delArea = r => (r.area || Calc.AREA_BASE) === S.area;
+  const laborDelArea = nombre => S.labores.find(l => l.nombre === nombre && Calc.laborEnArea(l, S.area));
+
+  function pintarInicio() {
+    $('areasLista').innerHTML = Calc.AREAS.map(a => `<button type="button" class="area-btn${a.id === S.area ? ' on' : ''}" data-area="${a.id}">
+      <b>${esc(a.grupo === 'CULTIVO' ? 'Cultivo' : a.id[0] + a.id.slice(1).toLowerCase())}</b>${a.sede ? `<small>${esc(a.sede === 'LA CEJA' ? 'La Ceja' : 'San Jacinto')}</small>` : ''}</button>`).join('');
+  }
+
+  async function elegirArea(area) {
+    S.area = area;
+    await DB.setMeta('area', area);
+    const lider = $('liderInicio').value.trim();
+    if (lider) { $('lider').value = lider; await DB.setMeta('lider', lider); }
+    S.cadena = null;
+    filtrarCamas();
+    $('bloque').value = ''; llenarBloques();
+    $('areaActual').textContent = area;
+    $('zonaCultivo').classList.toggle('hidden', !Calc.esCultivo(area));
+    limpiarFormulario(false);
+    mostrar('registrar');
   }
 
   // ---------- Autocompletado ----------
@@ -110,13 +140,14 @@
   }
 
   function buscarLabores(q) {
-    if (!Calc.norm(q)) return S.labores.slice();
-    return Calc.buscar(S.labores, q, 'nombre');
+    const lista = S.labores.filter(l => Calc.laborEnArea(l, S.area));
+    if (!Calc.norm(q)) return lista;
+    return Calc.buscar(lista, q, 'nombre');
   }
 
   function badgeMedida(medida) {
     const t = Calc.tipoMedida(medida);
-    const cls = t === 'plantas' ? 'plantas' : t === 'tallos' ? 'tallos' : Calc.esGrupalPorMedida(medida) ? 'gr' : '';
+    const cls = t === 'plantas' ? 'plantas' : t === 'tallos' || t === 'unidades' ? 'tallos' : Calc.esGrupalPorMedida(medida) ? 'gr' : '';
     return `<span class="badge ${cls}">${esc(medida)}</span>`;
   }
 
@@ -131,12 +162,12 @@
     const l = S.labor;
     const tipo = l ? Calc.tipoMedida(l.medida) : 'tiempo';
     $('laborInfo').innerHTML = l
-      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : 'Se mide en tiempo; camas opcionales.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
+      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : Calc.esCultivo(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
       : '';
     const reqPl = tipo === 'plantas';
     ['bloqueLbl', 'loteLbl', 'camasLbl'].forEach(id => $(id).classList.toggle('req', reqPl));
     $('cantField').classList.toggle('hidden', tipo === 'tiempo');
-    $('cantLbl').textContent = tipo === 'tallos' ? 'Tallos' : 'Plantas';
+    $('cantLbl').textContent = { tallos: 'Tallos', unidades: 'Unidades' }[tipo] || 'Plantas';
     $('cantLbl').classList.toggle('req', tipo !== 'tiempo');
     if (tipo === 'plantas' && !S.cantManual) autoPlantas();
     // Vacaciones, incapacidades y ausencias por días: rango de fechas y jornada completa.
@@ -307,6 +338,7 @@
       id: S.editId || uid(),
       fecha: $('fecha').value,
       lider: $('lider').value.trim(),
+      area: S.editOriginal?.area || S.area,
       labor: S.labor?.nombre || '',
       medida: S.labor?.medida || '',
       empleados: S.sel.slice(),
@@ -333,7 +365,7 @@
       return;
     }
     const c = Calc.calcular(reg, S.cfg, S.empMap);
-    const unidad = c.tipo === 'tallos' ? 'tallos' : 'plantas';
+    const unidad = c.tipo === 'tiempo' ? 'plantas' : c.tipo;
     const desc = [c.desayuno && `desayuno ${fmt(c.desayuno, 2)}`, c.almuerzo && `almuerzo ${fmt(c.almuerzo, 2)}`, c.pausa && `pausa ${fmt(c.pausa, 2)}`].filter(Boolean).join(', ');
     const rend = c.tipo !== 'tiempo'
       ? `<div class="calc-rend">${fmt(c.rendimiento, 1)} <small>${unidad}/h por persona</small></div>` : '';
@@ -362,7 +394,7 @@
     if (!r) return;
     S.editId = r.id; S.editOriginal = r;
     $('fecha').value = r.fecha; $('lider').value = r.lider || '';
-    S.labor = S.labores.find(l => l.nombre === r.labor) || { nombre: r.labor, medida: r.medida };
+    S.labor = laborDelArea(r.labor) || { nombre: r.labor, medida: r.medida };
     $('laborInput').value = r.labor;
     S.sel = r.empleados.slice();
     r.empleados.forEach(c => { if (!S.empMap[c]) S.empMap[c] = { nombre: r.nombres?.[c] || c, cedula: c }; });
@@ -393,7 +425,7 @@
     ev?.preventDefault();
     // Si escribió una labor exacta sin elegirla de la lista, se acepta.
     if (!S.labor && $('laborInput').value) {
-      const l = S.labores.find(x => Calc.norm(x.nombre) === Calc.norm($('laborInput').value));
+      const l = S.labores.find(x => Calc.laborEnArea(x, S.area) && Calc.norm(x.nombre) === Calc.norm($('laborInput').value));
       if (l) S.labor = l;
     }
     const reg = leerFormulario();
@@ -409,7 +441,7 @@
     const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
     // Mientras haya un día incompleto (antes o después), no se escribe en otra fecha.
     if (!S.editId && dias.length) {
-      const bloq = Calc.diasQueBloquean(todos, dias[0], S.cfg, reg.id);
+      const bloq = Calc.diasQueBloquean(todos.filter(delArea), dias[0], S.cfg, reg.id);
       if (bloq.length) errores.unshift(`Hay ${bloq.length > 1 ? 'días incompletos' : 'un día incompleto'}: ${bloq.map(d => `${fechaCorta(d.fecha)} (${d.personas.length} persona${d.personas.length > 1 ? 's' : ''})`).join(', ')}. Complétalo desde el aviso de arriba antes de registrar el ${fechaCorta(dias[0])}.`);
     }
     const copias = dias.map((f, i) => (i === 0 ? Object.assign(reg, { fecha: f }) : { ...reg, id: uid(), fecha: f }));
@@ -443,7 +475,7 @@
   async function registrosCadena() {
     const ced = S.cadena || S.sel;
     if (!ced.length || !$('fecha').value) return [];
-    return (await DB.registrosPorFecha($('fecha').value)).filter(r => r.empleados.some(c => ced.includes(c)))
+    return (await DB.registrosPorFecha($('fecha').value)).filter(r => delArea(r) && r.empleados.some(c => ced.includes(c)))
       .sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
   }
 
@@ -459,7 +491,7 @@
     $('cadenaLista').innerHTML = regs.map(r => {
       const c = Calc.calcular(r, S.cfg, null);
       total += c.tiempoLab;
-      const cant = c.tipo !== 'tiempo' && r.cantidad ? ` · ${fmt(r.cantidad)} ${c.tipo === 'tallos' ? 'tallos' : 'pl.'}` : '';
+      const cant = c.tipo !== 'tiempo' && r.cantidad ? ` · ${fmt(r.cantidad)} ${c.tipo === 'plantas' ? 'pl.' : c.tipo}` : '';
       const lugar = Calc.tramosDe(r).map(t => `${t.bloque} L${t.lote}`).join(', ');
       return `<div class="cad-item${r.id === S.editId ? ' on' : ''}">
         <span class="cad-h">${esc(r.horaInicio)}–${esc(r.horaFin || '…')}</span>
@@ -520,7 +552,7 @@
   }
 
   async function pintarAbiertos() {
-    const regs = await DB.allRegistros();
+    const regs = (await DB.allRegistros()).filter(delArea);
     await pintarDia(regs);
     const ced = S.cadena || S.sel;
     // Los del día pendiente ya salen en su propio aviso.
@@ -553,7 +585,7 @@
   // ---------- Registros del día ----------
   async function pintarHoy() {
     const f = $('hoyFecha').value || hoyStr();
-    const regs = (await DB.registrosPorFecha(f)).sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
+    const regs = (await DB.registrosPorFecha(f)).filter(delArea).sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
     const lista = $('hoyLista');
     if (!regs.length) {
       lista.innerHTML = '<div class="empty">No hay registros en este día.</div>';
@@ -563,7 +595,7 @@
     lista.innerHTML = regs.map(r => {
       const c = Calc.calcular(r, S.cfg, S.empMap);
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
-      const unidad = c.tipo === 'tallos' ? 'tallos' : 'plantas';
+      const unidad = c.tipo === 'tiempo' ? 'plantas' : c.tipo;
       const abierto = r.estado === 'abierto';
       const det = [
         abierto ? `desde las ${r.horaInicio}, sin terminar` : `${r.horaInicio}–${r.horaFin} (${fmt(c.tiempoLab, 2)} h)`,
@@ -688,23 +720,30 @@
     const wb = await leerExcel(file);
     const t = tabla(wb, 'LABOR', { nombre: ['LABOR'], medida: ['MEDIDA'] });
     if (!t) throw new Error('No encontré una hoja con columnas LABORES y MEDIDA.');
-    const lista = t.filas.filter(f => String(f[t.idx.nombre]).trim()).map(f => ({ nombre: String(f[t.idx.nombre]).trim(), medida: String(f[t.idx.medida]).trim() || 'Tiempo' }));
+    const iA = t.enc.findIndex(h => h.startsWith('AREA'));
+    const lista = t.filas.filter(f => String(f[t.idx.nombre]).trim()).map(f => ({
+      area: iA >= 0 ? String(f[iA]).trim().toUpperCase() || 'TODAS' : 'CULTIVO',
+      nombre: String(f[t.idx.nombre]).trim(), medida: String(f[t.idx.medida]).trim() || 'Tiempo',
+    }));
     await DB.setMeta('labores', lista);
     S.labores = lista;
     return lista;
   }
 
-  async function importarPlano(file) {
+  async function importarPlano(file, sede) {
     const wb = await leerExcel(file);
     const t = tabla(wb, 'DATA', { bloque: ['BLOQUE'], lote: ['LOTE'], era: ['ERA', 'CAMA'], plantas: ['CANTIDAD DE PLANTA', 'PLANTAS'] });
     if (!t) throw new Error('No encontré una hoja con BLOQUE, LOTE, ERA y CANTIDAD DE PLANTAS.');
     const iV = t.enc.findIndex(h => h.startsWith('VARIEDAD'));
     const lista = t.filas.filter(f => String(f[t.idx.bloque]).trim() && f[t.idx.era] !== '').map(f => {
       const lote = f[t.idx.lote];
-      return [String(f[t.idx.bloque]).trim(), typeof lote === 'number' && Number.isInteger(lote) ? String(lote) : String(lote).trim(), Number(f[t.idx.era]), Number(f[t.idx.plantas]) || 0, iV >= 0 ? String(f[iV]).trim() : ''];
+      return [String(f[t.idx.bloque]).trim(), typeof lote === 'number' && Number.isInteger(lote) ? String(lote) : String(lote).trim(), Number(f[t.idx.era]), Number(f[t.idx.plantas]) || 0, iV >= 0 ? String(f[iV]).trim() : '', sede];
     }).filter(c => Number.isFinite(c[2]));
-    await DB.setMeta('camas', lista);
-    S.camas = lista;
+    if (!lista.length) throw new Error('El plano está vacío.');
+    // Reemplaza solo el plano de ese cultivo.
+    S.camasTodas = [...S.camasTodas.filter(c => Calc.sedeCama(c) !== sede), ...lista];
+    await DB.setMeta('camas', S.camasTodas);
+    filtrarCamas();
     llenarBloques();
     return lista;
   }
@@ -712,9 +751,11 @@
   async function pintarAjustes() {
     const act = S.empleados.filter(e => Calc.norm(e.estado) !== 'RETIRADO').length;
     $('empStatus').textContent = `${act} empleados activos y ${S.empleados.length - act} retirados en la lista.`;
-    const bloques = new Set(S.camas.map(c => c[0])).size;
-    const plantas = S.camas.reduce((s, c) => s + c[3], 0);
-    $('catStatus').textContent = `${S.labores.length} labores. Plano: ${bloques} bloques, ${fmt(S.camas.length)} camas, ${fmt(plantas)} plantas.`;
+    const plano = sede => {
+      const cs = S.camasTodas.filter(c => Calc.sedeCama(c) === sede);
+      return cs.length ? `${new Set(cs.map(c => c[0])).size} bloques, ${fmt(cs.length)} camas, ${fmt(cs.reduce((s, c) => s + c[3], 0))} plantas` : 'sin cargar';
+    };
+    $('catStatus').textContent = `${S.labores.length} labores de todas las áreas. Plano San Jacinto: ${plano('SAN JACINTO')}. Plano La Ceja: ${plano('LA CEJA')}.`;
     const c = S.cfg;
     $('cDesH').value = c.desayunoHora; $('cDesM').value = c.desayunoMin;
     $('cAlmH').value = c.almuerzoHora; $('cAlmM').value = c.almuerzoMin;
@@ -746,6 +787,14 @@
 
   // Vuelve a enviar todo lo terminado (el servidor reemplaza por registro, no duplica).
   // Se usa una vez cuando una corrección cambia lo que se manda a la hoja.
+  // Los registros de antes del módulo de áreas son del cultivo San Jacinto; se reenvían con su área.
+  async function areaRegistrosViejos() {
+    const viejos = (await DB.allRegistros()).filter(r => !r.area);
+    if (!viejos.length) return;
+    viejos.forEach(r => { r.area = Calc.AREA_BASE; if (r.estado !== 'abierto') r.sincronizado = false; });
+    await DB.putRegistros(viejos);
+  }
+
   async function reenviarUnaVez(marca) {
     const hechas = await DB.getMeta('reenvios', []);
     if (hechas.includes(marca)) return;
@@ -797,12 +846,14 @@
 
   // ---------- Navegación ----------
   function mostrar(vista) {
+    if (vista === 'registrar' && !S.area) vista = 'inicio';
+    if (vista === 'inicio') { pintarInicio(); $('liderInicio').value = $('lider').value; }
     document.querySelectorAll('main[id^="view-"]').forEach(m => m.classList.toggle('hidden', m.id !== `view-${vista}`));
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === vista));
     if (vista === 'hoy') pintarHoy();
     if (vista === 'ajustes') pintarAjustes();
-    if (vista === 'dashboard') Dashboard.abrir({ filasLocales, empMap: () => S.empMap, camas: () => S.camas, cfg: () => S.cfg, descargarExcel, toast });
-    try { localStorage.setItem('vista', vista); } catch { /* sin almacenamiento */ }
+    if (vista === 'dashboard') Dashboard.abrir({ filasLocales, empMap: () => S.empMap, camas: () => S.camasTodas, area: () => S.area, cfg: () => S.cfg, descargarExcel, toast });
+    if (vista !== 'inicio') try { localStorage.setItem('vista', vista); } catch { /* sin almacenamiento */ }
   }
 
   // ---------- Eventos ----------
@@ -873,6 +924,8 @@
     });
     $('abiertosVer').addEventListener('click', () => { S.verAbiertos = !S.verAbiertos; pintarAbiertos(); });
     $('fecha').addEventListener('change', () => { pintarCadena(); pintarAbiertos(); });
+    $('areasLista').addEventListener('click', ev => { const b = ev.target.closest('[data-area]'); if (b) elegirArea(b.dataset.area); });
+    $('cambiarArea').addEventListener('click', () => mostrar('inicio'));
 
     $('hoyFecha').addEventListener('change', pintarHoy);
     $('hoySync').addEventListener('click', async () => { const r = await Sync.sincronizar(); toast(r?.error ? `No se pudo sincronizar: ${r.error}` : 'Sincronización completa'); pintarHoy(); });
@@ -909,8 +962,10 @@
       r => `Empleados cargados: ${r.activos} activos, ${r.retirados} retirados.${r.nota}`);
     subir('btnLab', 'fileLab', async f => { const r = await importarLabores(f); return { n: r.length, nota: await alServidor('labores', r) }; },
       r => `${r.n} labores cargadas.${r.nota}`);
-    subir('btnPlano', 'filePlano', async f => { const r = await importarPlano(f); return { n: r.length, nota: await alServidor('camas', r) }; },
-      r => `${r.n} camas cargadas del plano.${r.nota}`);
+    subir('btnPlano', 'filePlano', async f => { const r = await importarPlano(f, 'SAN JACINTO'); return { n: r.length, nota: await alServidor('camas', S.camasTodas) }; },
+      r => `${r.n} camas cargadas del plano de San Jacinto.${r.nota}`);
+    subir('btnPlanoCeja', 'filePlanoCeja', async f => { const r = await importarPlano(f, 'LA CEJA'); return { n: r.length, nota: await alServidor('camas', S.camasTodas) }; },
+      r => `${r.n} camas cargadas del plano de La Ceja.${r.nota}`);
 
     ['fecha', 'fechaHasta', 'rangoSabados', 'hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', pintarRango));
 
@@ -966,10 +1021,15 @@
     }
     await cargarCatalogos();
     await reenviarUnaVez('lugar-trabajo-2026-10-29');
+    await areaRegistrosViejos();
     enlazar();
     $('fecha').value = hoyStr();
     $('hoyFecha').value = hoyStr();
     $('lider').value = await DB.getMeta('lider', '');
+    S.area = await DB.getMeta('area', '');
+    filtrarCamas(); llenarBloques();
+    $('areaActual').textContent = S.area;
+    $('zonaCultivo').classList.toggle('hidden', !Calc.esCultivo(S.area));
     pintarMinutosDescuento();
     limpiarFormulario(false);
     actualizarSyncPill();
@@ -977,7 +1037,8 @@
     try { vista = localStorage.getItem('vista') || vista; } catch { /* sin almacenamiento */ }
     if (location.hash === '#dashboard') vista = 'dashboard';
     const conectado = await conectarDesdeEnlace();
-    mostrar(conectado ? 'registrar' : vista);
+    // Al abrir, primero se elige el área (queda marcada la última); el enlace del dashboard entra directo.
+    mostrar(location.hash === '#dashboard' ? 'dashboard' : conectado || vista === 'registrar' ? 'inicio' : vista);
     if (!conectado) Sync.sincronizar();
   }
 

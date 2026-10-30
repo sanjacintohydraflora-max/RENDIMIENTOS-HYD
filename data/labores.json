@@ -1,130 +1,462 @@
 [
 {
+"area": "TODAS",
 "nombre": "AUSENCIAS POR DIAS",
 "medida": "Tiempo"
 },
 {
+"area": "TODAS",
 "nombre": "AUSENCIAS POR HORAS",
 "medida": "Tiempo"
 },
 {
+"area": "TODAS",
 "nombre": "CAPACITACIONES Y ACTIVIDADES",
 "medida": "Tiempo"
 },
 {
+"area": "TODAS",
 "nombre": "INCAPACIDADES",
 "medida": "Tiempo"
 },
 {
+"area": "TODAS",
 "nombre": "VACACIONES",
 "medida": "Tiempo"
 },
 {
+"area": "TODAS",
 "nombre": "COORDINACION DE LABORES",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "APOYO A POSCOSECHA",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "MONITOREAR",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "FUMIGAR",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "PROGRAMAR CON GUADAÑA Y SOQUEO",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "GUADAÑAR CALLES Y BORDES",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "HERVICIDA A CALLES",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "POLISOMBRAS",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "PODAR CETOS",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "MANTENIMIENTO",
 "medida": "Tiempo"
 },
 {
+"area": "CULTIVO",
 "nombre": "PONER MALLA",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "BAJAR Y SUBIR MALLAS Y REFORZAR TUTORES",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "FERTILIZAR",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "RALEO LATERAL",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "DESBOTONAR",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "ENCALAR",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "PULIR PROGRAMACION",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "SEMBRAR, RAYAR Y RESEMBRAR",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "ARRANCAR PLANTAS",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "ABONAR",
 "medida": "Tiempo GR"
 },
 {
+"area": "CULTIVO",
 "nombre": "CORTAR FLOR",
 "medida": "Tallos"
 },
 {
+"area": "CULTIVO",
 "nombre": "DESMALECE 1",
 "medida": "Plantas"
 },
 {
+"area": "CULTIVO",
 "nombre": "DESMALECE 2",
 "medida": "Plantas"
 },
 {
+"area": "CULTIVO",
 "nombre": "APORCAR Y PICAR SUELOS",
 "medida": "Plantas"
 },
 {
+"area": "CULTIVO",
 "nombre": "SELECCIONAR, RALEAR Y PRESELECCION",
 "medida": "Plantas"
 },
 {
+"area": "CULTIVO",
 "nombre": "PROGRAMAR A TIJERA",
 "medida": "Plantas"
 },
 {
+"area": "CULTIVO",
+"nombre": "CARGUE Y DESCARGUE",
+"medida": "Tiempo"
+},
+{
+"area": "CULTIVO",
 "nombre": "DESHOJAR",
 "medida": "Plantas"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "APOYO A CAMPO",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "APOYO A TINTURAS",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ARMAR RAMOS",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ASEO COMERCIALIZADORA",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "BOTAR DESCARTE",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "CARGUE Y DESCARGUE",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "EMPACAR",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ENCAPUCHAR",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "HIDRATAR",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "MAQUILLAR",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "PATINAR",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "REPROCESOS",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ZUNCHAR",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ETIQUETAR",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "RECEPCION DE FLOR",
+"medida": "Tallos"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "ARMAR CARTON",
+"medida": "Unidades"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "TRASLADOS DE FLOR",
+"medida": "Tiempo"
+},
+{
+"area": "COMERCIALIZADORA",
+"nombre": "APOYO INVENTARIO",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "APOYO A CAMPO",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "APOYO A COMERCIALIZADORA",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "ARMAR RAMOS",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "ASEO DE ZONAS COMUNES",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "ASEO MODULOS DE TINTURA",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "ASEO POSCOSECHA",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "BAJAR FLOR A BALDES",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "BOTAR DESCARTE",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "DESENCAPUCHAR FLOR",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "EMPACAR",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "ENCAPUCHAR",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "HIDRATAR",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "LAVAR BALDES",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "LAVAR CAJAS O CANASTAS",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "MAQUILLAR",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "PATINAR",
+"medida": "Tiempo"
+},
+{
+"area": "TINTAS",
+"nombre": "REPROCESOS",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "SELECCIÓN",
+"medida": "Tallos"
+},
+{
+"area": "TINTAS",
+"nombre": "TINTURADO",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "APOYO A CAMPO",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ASEO DE ZONAS COMUNES",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "BOTAR DESCARTE",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "CARGUE Y DESCARGUE",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "DESENCAPUCHAR FLOR",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "EMPACAR",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ENCAPUCHAR",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ENTRAR EMPAQUE",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ENTRAR Y SACAR FLOR A SECAR",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ESCURRIR FLOR",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "HIDRATAR",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "LAVAR BALDES",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "LAVAR CAJAS O CANASTAS",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "MAQUILLAR",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "MONITOREAR",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ORGANIZAR CAPUCHON",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "PATINAR",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "PREPARAR BALDES",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "REPROCESOS",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "RETIRAR CAPUCHONES EN COMPOSTERA",
+"medida": "Tiempo"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "SELECCIÓN",
+"medida": "Tallos"
+},
+{
+"area": "POSCOSECHA",
+"nombre": "ARMAR RAMOS",
+"medida": "Tallos"
 }
 ]

@@ -74,15 +74,28 @@ const Sync = (() => {
 
   async function bajarCatalogos() {
     const data = await llamar({ action: 'catalogos' });
+    // Un script anterior a las áreas no guarda el área de las labores ni la sede del plano:
+    // en ese caso este celular conserva sus labores y planos y solo baja empleados.
+    const conAreas = (data.version || 1) >= 2;
     // Si la hoja aún no tiene un catálogo y este celular sí, lo sube; si lo tiene, el servidor manda.
     for (const tipo of ['empleados', 'labores', 'camas']) {
-      if (data[tipo]?.length) await DB.setMeta(tipo, data[tipo]);
+      if (tipo !== 'empleados' && !conAreas) continue;
+      let servidor = data[tipo] || [];
+      // Un plano cargado en este celular que la hoja todavía no tiene (otro cultivo) se suma y se sube.
+      if (tipo === 'camas' && servidor.length) {
+        const sedes = new Set(servidor.map(Calc.sedeCama));
+        const faltan = (await DB.getMeta('camas', [])).filter(c => !sedes.has(Calc.sedeCama(c)));
+        if (faltan.length) { servidor = [...servidor, ...faltan]; await subirCatalogo('camas', servidor); }
+      }
+      const vieja = tipo === 'labores' && servidor.length && !servidor.some(l => l.area);
+      if (servidor.length && !vieja) await DB.setMeta(tipo, servidor);
       else {
         const local = await DB.getMeta(tipo, []);
         if (local.length) await subirCatalogo(tipo, local);
       }
     }
     await DB.setMeta('catalogosFecha', new Date().toISOString());
+    await DB.setMeta('servidorVersion', data.version || 1);
     return data;
   }
 

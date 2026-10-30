@@ -1,6 +1,10 @@
 /**
  * Servidor de la app de rendimientos Hydraflora (Google Apps Script).
  *
+ * Al actualizar desde una versión anterior: pega este archivo, guarda y en Implementar >
+ * Gestionar implementaciones > editar (lápiz) > Versión: Nueva versión > Implementar.
+ * La URL no cambia. Las columnas nuevas (AREA, SEDE) se agregan solas a las pestañas.
+ *
  * Instalación (una sola vez):
  *  1. Crea una Google Sheet vacía. Menú Extensiones > Apps Script.
  *  2. Pega este archivo completo en Code.gs y guarda.
@@ -18,16 +22,18 @@ const CLAVE_INICIAL = 'cambia-esta-clave';
 
 const HOJAS = {
   RENDIMIENTOS: [
-    'AÑO', 'MES', 'SEM', 'FECHA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
+    'AÑO', 'MES', 'SEM', 'FECHA', 'AREA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
     'HRA INICIO', 'HRA FIN', 'HORAS TOTALES', 'DESAYUNO', 'PAUSAS', 'ALMUERZO', 'TIEMPO LAB',
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
     'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO',
   ],
   EMPLEADOS: ['NOMBRE', 'ESTADO', 'CEDULA', 'LUGARDE TRABAJO', 'CARGO', 'AREA'],
-  LABORES: ['LABORES', 'MEDIDA'],
-  CAMAS: ['BLOQUE', 'LOTE', 'ERA', 'CANTIDAD DE PLANTAS', 'VARIEDAD'],
+  LABORES: ['AREA', 'LABORES', 'MEDIDA'],
+  CAMAS: ['SEDE', 'BLOQUE', 'LOTE', 'ERA', 'CANTIDAD DE PLANTAS', 'VARIEDAD'],
 };
 // Columnas que se guardan como texto para que Sheets no las convierta en fecha o número.
+// Versión del formato que entiende la app (2 = áreas y dos planos).
+const VERSION = 2;
 const COLUMNAS_TEXTO = ['CEDULA', 'HRA INICIO', 'HRA FIN', 'LOTE', 'CAMAS', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO'];
 
 function configurar() {
@@ -65,7 +71,7 @@ function doGet(e) {
   try {
     const p = e.parameter || {};
     if (!autorizado(p.key)) return responder({ ok: false, error: 'Clave incorrecta' });
-    if (p.action === 'catalogos') return responder({ ok: true, ...catalogos() });
+    if (p.action === 'catalogos') return responder({ ok: true, version: VERSION, ...catalogos() });
     if (p.action === 'filas') return responder({ ok: true, filas: filas(p.desde, p.hasta) });
     return responder({ ok: true, ping: new Date().toISOString() });
   } catch (err) {
@@ -95,10 +101,23 @@ function hoja(nombre) {
   return h;
 }
 
+/** Agrega al final las columnas que falten (hojas creadas con una versión anterior). */
+function asegurarColumnas(h, nombre) {
+  const ultima = Math.max(h.getLastColumn(), 1);
+  const enc = h.getRange(1, 1, 1, ultima).getValues()[0].map(String);
+  const norm = x => String(x).replace(/\s+/g, '');
+  const faltan = HOJAS[nombre].filter(c => !enc.some(e => norm(e) === norm(c)));
+  if (!faltan.length) return;
+  const desde = enc.filter(String).length + 1;
+  h.getRange(1, desde, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+  faltan.forEach((c, i) => { if (COLUMNAS_TEXTO.indexOf(c) >= 0) h.getRange(2, desde + i, h.getMaxRows() - 1, 1).setNumberFormat('@'); });
+}
+
 function leer(nombre) {
   const h = hoja(nombre);
+  asegurarColumnas(h, nombre);
   const n = h.getLastRow() - 1;
-  if (n < 1) return { h: h, enc: HOJAS[nombre], datos: [] };
+  if (n < 1) return { h: h, enc: h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0].map(String), datos: [] };
   const v = h.getRange(1, 1, n + 1, h.getLastColumn()).getValues();
   return { h: h, enc: v[0].map(String), datos: v.slice(1) };
 }
@@ -106,7 +125,8 @@ function leer(nombre) {
 /** Reemplaza las filas de cada registro recibido (así una edición no duplica) y borra los eliminados. */
 function guardar(registros, borrados) {
   const t = leer('RENDIMIENTOS');
-  const enc = HOJAS.RENDIMIENTOS;
+  // Se escribe según el orden real de la hoja (las columnas nuevas pueden estar al final).
+  const enc = t.enc.length ? t.enc : HOJAS.RENDIMIENTOS;
   const iReg = t.enc.indexOf('ID REGISTRO');
   const quitar = {};
   registros.forEach(r => { quitar[r.id] = true; });
@@ -126,7 +146,7 @@ function guardar(registros, borrados) {
   registros.forEach(r => (r.filas || []).forEach(f => {
     nuevas.push(enc.map(c => {
       // Celulares con la versión anterior mandan la columna como LUGARDE TRABAJO.
-      const v = c === 'LUGAR DE TRABAJO' && f[c] === undefined ? f['LUGARDE TRABAJO'] : f[c];
+      const v = (c === 'LUGAR DE TRABAJO' || c === 'LUGARDE TRABAJO') && f[c] === undefined ? f['LUGAR DE TRABAJO'] ?? f['LUGARDE TRABAJO'] : f[c];
       if (c === 'FECHA' && v) { const p = String(v).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
       return v === undefined || v === null ? '' : v;
     }));
@@ -167,8 +187,14 @@ function catalogos() {
       cedula: String(f[col(e, 'CEDULA')]).trim(), lugar: String(f[col(e, 'LUGARDE TRABAJO')]).trim(),
       cargo: String(f[col(e, 'CARGO')]).trim(), area: String(f[col(e, 'AREA')]).trim(),
     })),
-    labores: l.datos.filter(f => f[0] !== '').map(f => ({ nombre: String(f[0]).trim(), medida: String(f[1]).trim() })),
-    camas: c.datos.filter(f => f[0] !== '').map(f => [String(f[0]).trim(), String(f[1]).trim(), Number(f[2]), Number(f[3]) || 0, String(f[4]).trim()]),
+    labores: l.datos.filter(f => f[col(l, 'LABORES')] !== '').map(f => ({
+      area: String(f[col(l, 'AREA')] || '').trim().toUpperCase(), nombre: String(f[col(l, 'LABORES')]).trim(), medida: String(f[col(l, 'MEDIDA')]).trim(),
+    })),
+    // Las camas cargadas antes de los dos planos son de San Jacinto.
+    camas: c.datos.filter(f => f[col(c, 'BLOQUE')] !== '').map(f => [
+      String(f[col(c, 'BLOQUE')]).trim(), String(f[col(c, 'LOTE')]).trim(), Number(f[col(c, 'ERA')]),
+      Number(f[col(c, 'CANTIDAD DE PLANTAS')]) || 0, String(f[col(c, 'VARIEDAD')]).trim(), String(f[col(c, 'SEDE')] || '').trim() || 'SAN JACINTO',
+    ]),
   };
 }
 
@@ -179,10 +205,12 @@ function guardarCatalogo(tipo, datos) {
   const enc = HOJAS[nombre];
   const filasNuevas = datos.map(d => {
     if (tipo === 'empleados') return [d.nombre, d.estado, String(d.cedula), d.lugar || '', d.cargo || '', d.area || ''];
-    if (tipo === 'labores') return [d.nombre, d.medida];
-    return [d[0], String(d[1]), d[2], d[3], d[4]];
+    if (tipo === 'labores') return [d.area || 'CULTIVO', d.nombre, d.medida];
+    return [d[5] || 'SAN JACINTO', d[0], String(d[1]), d[2], d[3], d[4]];
   });
-  if (h.getLastRow() > 1) h.getRange(2, 1, h.getLastRow() - 1, enc.length).clearContent();
+  // Los catálogos se reemplazan completos, con los encabezados de esta versión.
+  h.clearContents();
+  h.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold');
   if (filasNuevas.length) h.getRange(2, 1, filasNuevas.length, enc.length).setValues(filasNuevas);
   return filasNuevas.length;
 }

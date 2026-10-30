@@ -92,13 +92,18 @@ const Dashboard = (() => {
 
   function filtrar(filas) {
     const d = $('fDesde').value, h = $('fHasta').value, l = $('fLabor').value, p = $('fPersona').value, b = $('fBloque').value, g = $('fLugar').value;
-    return filas.filter(f => (!d || f.FECHA >= d) && (!h || f.FECHA <= h) && (!l || f.LABOR === l) && (!p || String(f.CEDULA) === p) && (!b || f.BLOQUE === b) && (!g || lugar(f) === g));
+    const a = $('fArea').value, li = $('fLider').value;
+    return filas.filter(f => (!d || f.FECHA >= d) && (!h || f.FECHA <= h) && (!l || f.LABOR === l) && (!p || String(f.CEDULA) === p) && (!b || f.BLOQUE === b) && (!g || lugar(f) === g)
+      && (!a || areaDe(f) === a) && (!li || liderDe(f) === li));
   }
 
   const tipo = f => Calc.tipoMedida(f.MEDIDA);
+  // Las filas de antes del módulo de áreas eran todas del cultivo San Jacinto.
+  const areaDe = f => f.AREA || Calc.AREA_BASE;
+  const liderDe = f => String(f.LIDER || '').trim().toUpperCase();
   // La columna se llamó LUGARDE TRABAJO en la primera versión de la hoja.
   const lugar = f => f['LUGAR DE TRABAJO'] ?? f['LUGARDE TRABAJO'] ?? '';
-  const unidad = t => (t === 'tallos' ? 'tallos/h' : 'plantas/h');
+  const unidad = t => `${t}/h`;
 
   function opciones(sel, valores, todos) {
     const cur = sel.value;
@@ -175,15 +180,17 @@ const Dashboard = (() => {
     const personas = new Set(filas.map(f => f.CEDULA)).size;
     const plantas = filas.filter(f => tipo(f) === 'plantas').reduce((s, f) => s + Number(f.CANTIDAD || 0), 0);
     const tallos = filas.filter(f => tipo(f) === 'tallos').reduce((s, f) => s + Number(f.CANTIDAD || 0), 0);
+    const unidades = filas.filter(f => tipo(f) === 'unidades').reduce((s, f) => s + Number(f.CANTIDAD || 0), 0);
     const hMedidas = filas.filter(f => tipo(f) !== 'tiempo').reduce((s, f) => s + Number(f['TIEMPO LAB'] || 0), 0);
     const dias = new Set(filas.map(f => f.FECHA)).size;
     $('kpis').innerHTML = [
       ['Horas laboradas', fmt(horas, 1), `${dias} días con registros`],
       ['Personas', fmt(personas), `${filas.length} filas de rendimiento`],
       ['Plantas trabajadas', fmt(plantas), 'labores medidas en plantas'],
-      ['Tallos cortados', fmt(tallos), 'Cortar flor'],
-      ['Tiempo en labores medidas', horas ? `${fmt((hMedidas / horas) * 100)}%` : '—', 'plantas y tallos sobre el total'],
-    ].map(([l, v, s]) => `<div class="kpi"><div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-s">${s}</div></div>`).join('');
+      ['Tallos', fmt(tallos), 'labores medidas en tallos'],
+      unidades ? ['Unidades', fmt(unidades), 'labores medidas en unidades'] : null,
+      ['Tiempo en labores medidas', horas ? `${fmt((hMedidas / horas) * 100)}%` : '—', 'plantas, tallos y unidades sobre el total'],
+    ].filter(Boolean).map(([l, v, s]) => `<div class="kpi"><div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-s">${s}</div></div>`).join('');
   }
 
   function promMax(filas) {
@@ -198,13 +205,13 @@ const Dashboard = (() => {
       texto: `${fmt(g.suma / g.n)} · máx ${fmt(g.max)}`,
       tip: `${g.labor}\nPromedio ${fmt(g.suma / g.n, 1)} ${unidad(g.t)}\nMáximo ${fmt(g.max, 1)} ${unidad(g.t)}\n${g.n} registros · ${fmt(g.cant)} ${g.t} en ${fmt(g.horas, 1)} h`,
     }));
-    const pl = porUnidad('plantas'), ta = porUnidad('tallos');
+    const pl = porUnidad('plantas'), ta = porUnidad('tallos'), un = porUnidad('unidades');
     $('cPromMax').innerHTML = encabezado('Rendimiento promedio y máximo por labor', 'Promedio de los rendimientos por persona en el período; la marca negra es el máximo.') +
       `<div class="legend"><span><i style="background:var(--series-1)"></i>Promedio</span><span><i class="tick"></i>Máximo</span></div>` +
-      (pl.length || ta.length
-        ? (pl.length ? `<p class="chart-sub" style="margin:8px 0 4px"><b>Plantas por hora</b></p>${barrasH(pl, { ancho: anchoDe('cPromMax'), etiqueta: 240, margen: 130 })}` : '') +
-          (ta.length ? `<p class="chart-sub" style="margin:12px 0 4px"><b>Tallos por hora</b></p>${barrasH(ta, { ancho: anchoDe('cPromMax'), etiqueta: 240, margen: 130 })}` : '')
-        : '<div class="empty">No hay labores medidas en plantas o tallos en este filtro.</div>');
+      (pl.length || ta.length || un.length
+        ? [[pl, 'Plantas por hora'], [ta, 'Tallos por hora'], [un, 'Unidades por hora']].filter(([x]) => x.length)
+          .map(([x, t], i) => `<p class="chart-sub" style="margin:${i ? 12 : 8}px 0 4px"><b>${t}</b></p>${barrasH(x, { ancho: anchoDe('cPromMax'), etiqueta: 240, margen: 130 })}`).join('')
+        : '<div class="empty">No hay labores medidas en plantas, tallos o unidades en este filtro.</div>');
   }
 
   function horasLabor(filas) {
@@ -297,8 +304,11 @@ const Dashboard = (() => {
   }
 
   function bloques(filas) {
-    const camas = ctx.camas();
-    const fl = filas.filter(f => tipo(f) === 'plantas' && f.BLOQUE);
+    // Cada cultivo tiene su plano: se usa el del área filtrada o, si no hay filtro, el del área de este celular.
+    const area = Calc.esCultivo($('fArea').value) ? $('fArea').value : Calc.esCultivo(ctx.area()) ? ctx.area() : Calc.AREA_BASE;
+    const sede = Calc.areaInfo(area).sede;
+    const camas = ctx.camas().filter(c => Calc.sedeCama(c) === sede);
+    const fl = filas.filter(f => tipo(f) === 'plantas' && f.BLOQUE && areaDe(f) === area);
     const labores = [...new Set(fl.map(f => f.LABOR))].sort();
     if (!labores.includes(laborBloque)) laborBloque = labores[0] || '';
     const inv = {};
@@ -310,7 +320,7 @@ const Dashboard = (() => {
       texto: `${fmt(((hecho[b] || 0) / inv[b]) * 100, ((hecho[b] || 0) / inv[b]) * 100 < 10 ? 1 : 0)}% · ${fmt(hecho[b] || 0)} de ${fmt(inv[b])}`,
       tip: `${b}\n${fmt(hecho[b] || 0)} plantas trabajadas\n${fmt(inv[b])} plantas en el plano`,
     }));
-    $('cBloques').innerHTML = encabezado('Avance por bloque', labores.length ? 'Plantas trabajadas en el período sobre el inventario del plano de producción. Si una cama se repasó, puede superar el 100%.' : 'Sin labores medidas en plantas en este filtro.',
+    $('cBloques').innerHTML = encabezado(`Avance por bloque · ${sede[0]}${sede.slice(1).toLowerCase().replace(/ (.)/g, (m, c) => ` ${c.toUpperCase()}`)}`, labores.length ? 'Plantas trabajadas en el período sobre el inventario del plano de producción. Si una cama se repasó, puede superar el 100%.' : 'Sin labores medidas en plantas en este filtro.',
       labores.length ? selectorLabor('selBloque', labores, laborBloque) : '') +
       (labores.length ? barrasH(lista, { ancho: anchoDe('cBloques'), etiqueta: 44, maxFijo: 100, margen: 160 }) : '');
     $('selBloque')?.addEventListener('change', e => { laborBloque = e.target.value; render(); });
@@ -327,6 +337,8 @@ const Dashboard = (() => {
     const pers = new Map(todas.map(f => [String(f.CEDULA), f.NOMBRE]));
     opciones($('fPersona'), [...pers].sort((a, b) => a[1].localeCompare(b[1])), 'Todas');
     opciones($('fBloque'), [...new Set(todas.map(f => f.BLOQUE).filter(Boolean))].sort(numSort).map(b => [b, b]), 'Todos');
+    opciones($('fArea'), Calc.AREAS.map(a => [a.id, a.id]), 'Todas');
+    opciones($('fLider'), [...new Set(todas.map(liderDe).filter(Boolean))].sort().map(x => [x, x]), 'Todos');
     opciones($('fLugar'), [...new Set(todas.map(lugar).filter(Boolean))].sort().map(b => [b, b]), 'Todos');
     const filas = filtrar(todas);
     ultimas = filas;
@@ -375,7 +387,7 @@ const Dashboard = (() => {
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
       await traerServidor(); render();
     }));
-    ['fLabor', 'fPersona', 'fBloque', 'fLugar'].forEach(id => $(id).addEventListener('change', render));
+    ['fArea', 'fLider', 'fLabor', 'fPersona', 'fBloque', 'fLugar'].forEach(id => $(id).addEventListener('change', render));
     $('dashRefresh').addEventListener('click', async () => { await traerServidor(); render(); });
     let t;
     window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('view-dashboard').classList.contains('hidden')) render(); }, 250); });
