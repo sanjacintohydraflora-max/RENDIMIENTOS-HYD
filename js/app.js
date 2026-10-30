@@ -356,6 +356,7 @@
     $('editBanner').classList.add('hidden');
     $('saveBtn').textContent = 'Guardar registro';
     $('savePartial').classList.remove('hidden'); $('partialHint').classList.remove('hidden');
+    $('saveNext').classList.remove('hidden'); $('nextHint').classList.remove('hidden');
     $('formErr').textContent = '';
     pintarChips(); pintarTramos(); actualizarLabor(); pintarCamas(); aplicarDescuentosAuto();
     pintarAbiertos();
@@ -386,13 +387,14 @@
     $('editBanner').querySelector('.badge').textContent = abierto ? 'Terminando registro' : 'Editando registro';
     $('saveBtn').textContent = abierto ? 'Terminar registro' : 'Guardar cambios';
     $('savePartial').classList.toggle('hidden', !abierto); $('partialHint').classList.toggle('hidden', !abierto);
+    $('saveNext').classList.toggle('hidden', !abierto); $('nextHint').classList.toggle('hidden', !abierto);
     if (abierto && !r.horaFin) setTimeout(() => $('hFin').focus(), 50);
     pintarAbiertos();
     mostrar('registrar');
     window.scrollTo(0, 0);
   }
 
-  async function guardar(ev, parcial = false) {
+  async function guardar(ev, parcial = false, seguir = false) {
     ev?.preventDefault();
     // Si escribió una labor exacta sin elegirla de la lista, se acepta.
     if (!S.labor && $('laborInput').value) {
@@ -433,7 +435,14 @@
       : editando ? (S.editOriginal?.estado === 'abierto' ? 'Registro terminado' : 'Cambios guardados')
         : copias.length > 1 ? `Se registraron ${copias.length} días, del ${copias[0].fecha} al ${copias[copias.length - 1].fecha}`
           : `Registro guardado${reg.empleados.length > 1 ? ` para ${reg.empleados.length} personas` : ''}`, 3500);
-    limpiarFormulario(!editando && !parcial);
+    const personas = S.sel.slice();
+    limpiarFormulario(seguir || (!editando && !parcial));
+    // Varias labores seguidas de la misma persona: quedan las mismas personas y la hora de inicio es la de fin.
+    if (seguir) {
+      S.sel = personas; pintarChips();
+      toast(`Guardado. Sigue la próxima labor desde las ${$('hInicio').value}.`, 3500);
+      setTimeout(() => $('laborInput').focus(), 50);
+    }
     actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
   }
@@ -448,7 +457,8 @@
       const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}${x.camas?.length ? ` camas ${Calc.formatCamas(x.camas)}` : ''}`).join(' · ');
       return `<div class="reg"><div class="r-main"><div class="r-t">${esc(r.labor)}</div><div class="r-s">${esc(nombres)}</div>
         <div class="r-s">${esc(r.fecha)} desde las ${esc(r.horaInicio)}${t ? ` · ${esc(t)}` : ''}</div></div>
-        <div class="r-a"><button type="button" class="btn small primary" data-editar="${r.id}">Completar</button></div></div>`;
+        <div class="r-a"><button type="button" class="btn small primary" data-editar="${r.id}">Completar</button>
+          <button type="button" class="btn small danger" data-borrar="${r.id}">Eliminar</button></div></div>`;
     }).join('');
   }
 
@@ -515,7 +525,8 @@
     b.push(id);
     await DB.setMeta('borrados', b);
     toast('Registro borrado');
-    pintarHoy(); actualizarSyncPill();
+    if (S.editId === id) limpiarFormulario(false);
+    pintarHoy(); pintarAbiertos(); actualizarSyncPill();
     Sync.sincronizar({ catalogos: false });
   }
 
@@ -747,6 +758,7 @@
     $('fecha').addEventListener('change', recalcular);
     $('form').addEventListener('submit', ev => guardar(ev, false));
     $('savePartial').addEventListener('click', () => guardar(null, true));
+    $('saveNext').addEventListener('click', () => guardar(null, false, true));
     $('tramoAdd').addEventListener('click', anadirTramo);
     $('tramosChips').addEventListener('click', ev => {
       const q = ev.target.closest('[data-quitar-tramo]');
@@ -756,6 +768,7 @@
     });
     $('abiertosLista').addEventListener('click', ev => {
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
+      const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
     $('cancelEdit').addEventListener('click', () => limpiarFormulario(false));
 
