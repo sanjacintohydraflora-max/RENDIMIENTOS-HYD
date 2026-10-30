@@ -344,7 +344,25 @@ const Dashboard = (() => {
     opciones($('fLugar'), [...new Set(todas.map(lugar).filter(Boolean))].sort().map(b => [b, b]), 'Todos');
     const filas = filtrar(todas);
     ultimas = filas;
+    pintarResumen();
     kpis(filas); promMax(filas); horasLabor(filas); porPersona(filas); tendencia(filas); revision(filas); bloques(filas);
+  }
+
+  // Resumen de filtros (celular) y número de filtros activos en el botón flotante.
+  const FILTROS = [['fArea', 'Área'], ['fLider', 'Líder'], ['fLabor', 'Labor'], ['fPersona', 'Persona'], ['fBloque', 'Bloque'], ['fLugar', 'Lugar']];
+  function pintarResumen() {
+    const corta = f => (f ? `${f.slice(8)}/${f.slice(5, 7)}` : '…');
+    const sem = $('fSemana').value ? `Sem ${$('fSemana').value} · ` : '';
+    const activos = FILTROS.filter(([id]) => $(id).value).map(([id]) => $(id).selectedOptions[0]?.textContent || $(id).value);
+    $('filtrosResumen').innerHTML = `<span class="fecha">${esc(sem)}${corta($('fDesde').value)} – ${corta($('fHasta').value)}</span>` +
+      activos.map(t => `<span>${esc(corto(t, 24))}</span>`).join('');
+    $('fabN').textContent = activos.length;
+    $('fabN').classList.toggle('hidden', !activos.length);
+  }
+
+  function abrirFiltros(abrir) {
+    $('dashFiltros').classList.toggle('abierto', abrir);
+    $('filtrosFondo').classList.toggle('abierto', abrir);
   }
 
   function tooltips() {
@@ -390,6 +408,10 @@ const Dashboard = (() => {
       await traerServidor(); render();
     }));
     ['fArea', 'fLider', 'fLabor', 'fPersona', 'fBloque', 'fLugar'].forEach(id => $(id).addEventListener('change', render));
+    $('fabFiltros').addEventListener('click', () => abrirFiltros(true));
+    $('filtrosListo').addEventListener('click', () => abrirFiltros(false));
+    $('filtrosFondo').addEventListener('click', () => abrirFiltros(false));
+    $('filtrosLimpiar').addEventListener('click', () => { FILTROS.forEach(([id]) => { $(id).value = ''; }); render(); });
     $('dashRefresh').addEventListener('click', async () => { await traerServidor(); render(); });
     let t;
     window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('view-dashboard').classList.contains('hidden')) render(); }, 250); });

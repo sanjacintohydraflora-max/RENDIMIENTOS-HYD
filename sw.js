@@ -1,6 +1,6 @@
 // Service worker: guarda la app en el celular para abrirla sin señal.
 // Cambia VERSION en cada publicación para que los celulares bajen la versión nueva.
-const VERSION = 'v19';
+const VERSION = 'v20';
 const CACHE = `rendimientos-${VERSION}`;
 const ARCHIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',

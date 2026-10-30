@@ -211,7 +211,9 @@
 
   <!-- DASHBOARD -->
   <main id="view-dashboard" class="hidden wide">
-    <div class="card">
+    <div id="filtrosFondo" class="sheet-fondo"></div>
+    <div class="card sheet" id="dashFiltros" role="dialog" aria-label="Filtros del dashboard">
+      <div class="sheet-head"><h2>Filtros</h2><button type="button" class="btn small" id="filtrosLimpiar">Quitar filtros</button></div>
       <div class="filters">
         <div class="field"><label class="f" for="fAnio">Año</label><select id="fAnio"></select></div>
         <div class="field"><label class="f" for="fMes">Mes</label><select id="fMes"></select></div>
@@ -232,11 +234,21 @@
           <button type="button" data-r="30">30 días</button>
           <button type="button" data-r="mes">Este mes</button>
         </div>
+      </div>
+      <button type="button" class="btn primary block" id="filtrosListo" style="margin-top:12px">Ver resultados</button>
+    </div>
+    <div class="dash-top">
+      <div class="dash-resumen" id="filtrosResumen"></div>
+      <div class="btn-row" style="align-items:center">
         <button type="button" class="btn small" id="dashRefresh">Actualizar del servidor</button>
         <button type="button" class="btn small" id="dashExport">Descargar Excel</button>
         <span class="hint" id="dashSource"></span>
       </div>
     </div>
+    <button type="button" class="fab" id="fabFiltros" aria-label="Filtros">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+      Filtros<span class="fab-n hidden" id="fabN"></span>
+    </button>
     <div class="kpis" id="kpis"></div>
     <div class="dash-grid">
       <div class="card span2" id="cPromMax"></div>

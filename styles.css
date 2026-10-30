@@ -343,3 +343,33 @@ form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(
 .area-bar .btn.small { min-height: 32px; padding: 4px 12px; }
 .horario-tabla td { padding: 4px 6px 4px 0; }
 .horario-tabla input[type=time] { min-height: 38px; padding: 4px 6px; }
+
+/* Dashboard: en el celular los filtros van en una hoja que abre un botón flotante */
+.dash-top { margin: 0 0 14px; }
+.dash-top .btn-row { gap: 8px; }
+.dash-resumen { display: none; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.sheet-head h2 { margin: 0; }
+.fab, .sheet-fondo, #filtrosListo, #filtrosLimpiar { display: none; }
+@media (max-width: 899px) {
+  .dash-resumen { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .dash-resumen span { background: var(--brand-soft); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+  .dash-resumen span.fecha { font-weight: 600; }
+  #dashFiltros {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; margin: 0;
+    max-height: 85vh; overflow-y: auto; border-radius: 16px 16px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .22s ease; visibility: hidden;
+  }
+  #dashFiltros.abierto { transform: none; visibility: visible; }
+  #filtrosListo, #filtrosLimpiar { display: inline-flex; justify-content: center; }
+  .sheet-fondo.abierto { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .35); }
+  #view-dashboard:not(.hidden) .fab {
+    display: inline-flex; align-items: center; gap: 8px; position: fixed; right: 16px; z-index: 50;
+    bottom: calc(80px + env(safe-area-inset-bottom)); padding: 12px 18px; border-radius: 999px; border: 0;
+    background: var(--brand); color: var(--brand-ink); font: inherit; font-weight: 600; font-size: 15px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .25); cursor: pointer;
+  }
+  .fab svg { width: 20px; height: 20px; }
+  .fab-n { background: var(--surface); color: var(--brand); border-radius: 999px; min-width: 20px; padding: 0 6px; font-size: 12px; text-align: center; }
+}
