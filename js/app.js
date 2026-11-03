@@ -528,7 +528,7 @@
         <span class="cad-l"><b>${esc(r.labor)}</b><small>${r.estado === 'abierto' ? '<span class="flag-low">sin terminar</span>' : `${fmt(c.tiempoLab, 2)} h`}${cant}${lugar ? ` · ${esc(lugar)}` : ''}</small></span>
         ${r.id === S.editId ? '<span class="badge gr">Editando</span>'
           : r.estado === 'abierto' ? `<button type="button" class="btn small primary" data-editar="${r.id}">Completar</button><button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>`
-            : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button>`}
+            : `<button type="button" class="btn small" data-editar="${r.id}">Editar</button><button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>`}
       </div>`;
     }).join('');
     const jornada = Calc.jornadaDia(cfgA(), $('fecha').value);
@@ -543,7 +543,9 @@
     if (fines.length) $('hInicio').value = fines[fines.length - 1];
     $('hFin').value = '';
     pintarChips(); aplicarDescuentosAuto(); recalcular();
-    setTimeout(() => $('laborInput').focus(), 50);
+    // En el celular se sube al inicio para ver las labores guardadas y los pendientes (sin abrir el teclado).
+    if (matchMedia('(max-width: 700px)').matches) setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 80);
+    else setTimeout(() => $('laborInput').focus(), 50);
   }
 
   // ---------- Registros sin terminar ----------
