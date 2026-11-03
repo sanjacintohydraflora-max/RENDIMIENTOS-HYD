@@ -326,6 +326,6 @@ const Calc = (() => {
     });
   }
 
-  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

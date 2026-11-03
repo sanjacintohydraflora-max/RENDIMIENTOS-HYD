@@ -592,13 +592,21 @@
     const todos = regs.filter(r => r.estado === 'abierto' && r.id !== S.editId && (ced.length || r.fecha !== S.diaPendiente))
       .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio));
     const conPersona = ced.length > 0;
-    const abiertos = conPersona ? todos.filter(r => r.fecha !== $('fecha').value && r.empleados.some(c => ced.includes(c))) : todos;
+    const deLaPersona = r => r.empleados.some(c => ced.includes(c));
+    const sinTerminar = conPersona ? todos.filter(r => r.fecha !== $('fecha').value && deLaPersona(r)) : todos;
+    // Labores ya guardadas (p. ej. con "Guardar y otra labor") de quien aún no completa la jornada del día.
+    const f = $('fecha').value;
+    const delDia = f && f !== S.diaPendiente ? regs.filter(r => r.fecha === f) : [];
+    const faltan = Object.fromEntries(Calc.incompletosDelDia(delDia, f, cfgA()).map(p => [p.ced, p]));
+    const guardadas = delDia.filter(r => r.estado !== 'abierto' && r.id !== S.editId && r.empleados.some(c => faltan[c]) && (!conPersona || deLaPersona(r)));
+    const abiertos = [...sinTerminar, ...guardadas]
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.horaInicio || '').localeCompare(b.horaInicio || ''));
     $('abiertosCard').classList.toggle('hidden', !abiertos.length);
     if (!abiertos.length) return;
     const personas = new Set(abiertos.flatMap(r => r.empleados)).size;
     $('abiertosTitulo').textContent = conPersona
-      ? `Sin terminar de otros días (${abiertos.length})`
-      : `Sin terminar: ${abiertos.length} registro${abiertos.length > 1 ? 's' : ''} de ${personas} persona${personas > 1 ? 's' : ''}`;
+      ? `Incompletos de esta persona (${abiertos.length})`
+      : `Incompletos: ${abiertos.length} registro${abiertos.length > 1 ? 's' : ''} de ${personas} persona${personas > 1 ? 's' : ''}`;
     const abierta = conPersona || S.verAbiertos;
     $('abiertosVer').classList.toggle('hidden', conPersona);
     $('abiertosVer').textContent = S.verAbiertos ? 'Ocultar' : 'Ver';
@@ -606,10 +614,13 @@
     $('abiertosLista').innerHTML = !abierta ? '' : abiertos.map(r => {
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
       const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}`).join(', ');
+      const abierto = r.estado === 'abierto';
+      const falta = abierto ? null : r.empleados.map(c => faltan[c]).find(Boolean);
+      const nota = abierto ? '<span class="flag-low">sin terminar</span>' : `${esc(r.horaInicio)}–${esc(r.horaFin)} · <span class="flag-low">faltan ${fmt(falta.meta - falta.horas, 2)} h del día</span>`;
       return `<div class="cad-item">
         <span class="cad-h">${esc(r.fecha.slice(5).split('-').reverse().join('/'))} ${esc(r.horaInicio)}</span>
-        <span class="cad-l"><b>${esc(conPersona ? r.labor : nombres)}</b><small>${esc(conPersona ? t : r.labor + (t ? ` · ${t}` : ''))}</small></span>
-        <button type="button" class="btn small primary" data-editar="${r.id}">Completar</button>
+        <span class="cad-l"><b>${esc(conPersona ? r.labor : nombres)}</b><small>${nota}${(conPersona ? t : 1) ? ` · ${esc(conPersona ? t : r.labor + (t ? ` · ${t}` : ''))}` : ''}</small></span>
+        <button type="button" class="btn small ${abierto ? 'primary' : ''}" data-editar="${r.id}">${abierto ? 'Completar' : 'Editar'}</button>
         <button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>
       </div>`;
     }).join('');
