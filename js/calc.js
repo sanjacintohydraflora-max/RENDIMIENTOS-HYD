@@ -298,6 +298,24 @@ const Calc = (() => {
     return inc.filter(d => d.fecha !== fecha);
   }
 
+  // Calculadora: evalúa sumas, restas, multiplicaciones, divisiones y paréntesis sin usar eval.
+  // Devuelve null si la cuenta está incompleta o no es válida.
+  function evaluar(expr) {
+    const toks = String(expr).replace(/,/g, '.').match(/\d+(?:\.\d+)?|\.\d+|[-+*/()]/g);
+    if (!toks || toks.join('') !== String(expr).replace(/,/g, '.').replace(/\s+/g, '')) return null;
+    let i = 0;
+    const num = () => {
+      const t = toks[i++];
+      if (t === '(') { const v = suma(); if (toks[i++] !== ')') throw 0; return v; }
+      if (t === '-') return -num();
+      if (t === undefined || !/^[\d.]/.test(t)) throw 0;
+      return Number(t);
+    };
+    const prod = () => { let v = num(); while (toks[i] === '*' || toks[i] === '/') { const o = toks[i++], b = num(); v = o === '*' ? v * b : v / b; } return v; };
+    const suma = () => { let v = prod(); while (toks[i] === '+' || toks[i] === '-') { const o = toks[i++], b = prod(); v = o === '+' ? v + b : v - b; } return v; };
+    try { const v = suma(); return i === toks.length && Number.isFinite(v) ? Math.round(v * 100) / 100 : null; } catch { return null; }
+  }
+
   // Busca empleados por cualquier parte del nombre o cédula. Todas las palabras deben coincidir.
   function buscar(lista, q, campo = 'nombre', extra = []) {
     const toks = norm(q).split(/\s+/).filter(Boolean);
@@ -308,6 +326,6 @@ const Calc = (() => {
     });
   }
 
-  return { COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

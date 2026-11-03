@@ -373,3 +373,23 @@ form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(
   .fab svg { width: 20px; height: 20px; }
   .fab-n { background: var(--surface); color: var(--brand); border-radius: 999px; min-width: 20px; padding: 0 6px; font-size: 12px; text-align: center; }
 }
+
+/* Calculadora de tallos y unidades */
+#calcModal {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; margin: 0 auto; max-width: 460px;
+  border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateY(105%); visibility: hidden; transition: transform .2s ease;
+}
+#calcModal.abierto { transform: none; visibility: visible; }
+.sheet-fondo.abierto { display: block; position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, .35); }
+#calcFondo.abierto { z-index: 65; }
+.calc-pantalla { background: var(--surface-2); border-radius: 10px; padding: 10px 14px; text-align: right; margin-bottom: 10px; }
+.calc-expr { font-size: 16px; color: var(--text-2); min-height: 22px; word-break: break-all; }
+.calc-res { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.calc-teclas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.calc-teclas button {
+  min-height: 54px; font: inherit; font-size: 22px; font-weight: 600; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+}
+.calc-teclas .t-op { background: var(--brand-soft); color: var(--brand); }
+.calc-teclas .t-fn { color: var(--text-2); }

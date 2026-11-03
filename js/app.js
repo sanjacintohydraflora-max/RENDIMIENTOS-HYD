@@ -179,7 +179,15 @@
       ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : Calc.tienePlano(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
       : '';
     const reqPl = tipo === 'plantas';
-    ['bloqueLbl', 'loteLbl', 'camasLbl'].forEach(id => $(id).classList.toggle('req', reqPl));
+    const soloBL = soloBloqueLote();
+    ['bloqueLbl', 'loteLbl', 'camasLbl'].forEach(id => $(id).classList.toggle('req', reqPl || (soloBL && id !== 'camasLbl')));
+    $('camasZona').classList.toggle('hidden', soloBL);
+    if (soloBL && S.camasSel.size) { S.camasSel = new Set(); pintarCamas(); }
+    // Con la calculadora no se abre el teclado del celular: tocar la casilla abre la calculadora.
+    const calc = usaCalculadora();
+    $('cantidad').readOnly = calc;
+    $('cantidad').setAttribute('inputmode', calc ? 'none' : 'numeric');
+    $('cantidad').placeholder = calc ? 'Toca para calcular' : '';
     $('cantField').classList.toggle('hidden', tipo === 'tiempo');
     $('cantLbl').textContent = { tallos: 'Tallos', unidades: 'Unidades' }[tipo] || 'Plantas';
     $('cantLbl').classList.toggle('req', tipo !== 'tiempo');
@@ -267,6 +275,11 @@
   }
 
   // Bloque/lote/camas que están marcados ahora en el selector (aún no añadidos a la lista).
+  // Cortar flor (labor en tallos de un cultivo con plano) pide bloque y lote, pero no camas.
+  const soloBloqueLote = () => !!S.labor && Calc.tienePlano(S.area) && Calc.tipoMedida(S.labor.medida) === 'tallos';
+  // Tallos y unidades se digitan con la calculadora.
+  const usaCalculadora = () => !!S.labor && ['tallos', 'unidades'].includes(Calc.tipoMedida(S.labor.medida));
+
   function tramoActual() {
     const bloque = $('bloque').value, lote = $('lote').value;
     if (!bloque || !lote) return null;
@@ -278,7 +291,7 @@
 
   function tramosFormulario() {
     const t = tramoActual();
-    const extra = t && (t.camas.length || !S.tramos.length) ? [{ bloque: t.bloque, lote: t.lote, camas: t.camas, plantas: t.plantas }] : [];
+    const extra = t && (t.camas.length || soloBloqueLote() || !S.tramos.length) ? [{ bloque: t.bloque, lote: t.lote, camas: t.camas, plantas: t.plantas }] : [];
     return [...S.tramos, ...extra];
   }
 
@@ -294,13 +307,13 @@
 
   function pintarTramos() {
     $('tramosBox').classList.toggle('hidden', !S.tramos.length);
-    $('tramosChips').innerHTML = S.tramos.map((t, i) => `<span class="chip"><button type="button" data-tramo="${i}" style="font-size:14px;padding:0;color:var(--text)">${esc(t.bloque)} · Lote ${esc(t.lote)} · camas ${esc(Calc.formatCamas(t.camas) || '—')}${t.plantas ? ` · ${fmt(t.plantas)} pl.` : ''}</button><button type="button" data-quitar-tramo="${i}" aria-label="Quitar">×</button></span>`).join('');
+    $('tramosChips').innerHTML = S.tramos.map((t, i) => `<span class="chip"><button type="button" data-tramo="${i}" style="font-size:14px;padding:0;color:var(--text)">${esc(t.bloque)} · Lote ${esc(t.lote)}${t.camas.length ? ` · camas ${esc(Calc.formatCamas(t.camas))}` : ''}${t.plantas ? ` · ${fmt(t.plantas)} pl.` : ''}</button><button type="button" data-quitar-tramo="${i}" aria-label="Quitar">×</button></span>`).join('');
     $('tramoAdd').textContent = S.tramos.length ? '+ Añadir este bloque y seguir con otro' : '+ Añadir otro bloque o lote';
   }
 
   function anadirTramo() {
     const t = tramoActual();
-    if (!t || !t.camas.length) { toast('Elige bloque, lote y camas antes de añadir.'); return false; }
+    if (!t || (!t.camas.length && !soloBloqueLote())) { toast(soloBloqueLote() ? 'Elige bloque y lote antes de añadir.' : 'Elige bloque, lote y camas antes de añadir.'); return false; }
     S.tramos.push({ bloque: t.bloque, lote: t.lote, camas: t.camas, plantas: t.plantas });
     S.camasSel = new Set();
     $('lote').value = '';
@@ -446,6 +459,7 @@
     reg.estado = parcial ? 'abierto' : 'completo';
     if (parcial) reg.horaFin = '';
     const errores = Calc.validar(reg, cfgA(), { parcial });
+    if (!parcial && soloBloqueLote() && (!reg.tramos.length || reg.tramos.some(t => !t.bloque || !t.lote))) errores.push(`${S.labor.nombre}: elige bloque y lote.`);
     if ($('laborInput').value && !S.labor) errores.unshift('La labor escrita no está en la lista; elígela de las sugerencias.');
     const todos = await DB.allRegistros();
     const dias = !parcial && !S.editId && S.labor && Calc.esPorDias(S.labor.nombre) ? diasRango() : [reg.fecha];
@@ -856,6 +870,31 @@
     return true;
   }
 
+  // ---------- Calculadora de tallos y unidades ----------
+  let calcExpr = '';
+  const bonito = e => e.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−').replace(/\./g, ',');
+  function pintarCalc() {
+    const v = Calc.evaluar(calcExpr);
+    $('calcExpr').textContent = bonito(calcExpr) || ' ';
+    $('calcRes').textContent = calcExpr === '' ? '0' : v == null ? '…' : fmt(v, Number.isInteger(v) ? 0 : 2);
+    $('calcUsar').disabled = v == null || v < 0;
+  }
+  function abrirCalc() {
+    if (!usaCalculadora()) return;
+    calcExpr = $('cantidad').value || '';
+    $('calcTitulo').textContent = `Calculadora · ${Calc.tipoMedida(S.labor.medida) === 'tallos' ? 'tallos' : 'unidades'}`;
+    pintarCalc();
+    $('calcModal').classList.add('abierto'); $('calcFondo').classList.add('abierto');
+  }
+  const cerrarCalc = () => { $('calcModal').classList.remove('abierto'); $('calcFondo').classList.remove('abierto'); };
+  function teclaCalc(k) {
+    if (k === 'C') calcExpr = '';
+    else if (k === 'B') calcExpr = calcExpr.slice(0, -1);
+    else if (k === '=') { const v = Calc.evaluar(calcExpr); if (v != null) calcExpr = String(v); }
+    else calcExpr += k;
+    pintarCalc();
+  }
+
   // ---------- Horarios por área (Ajustes) ----------
   const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   function leerHorario() {
@@ -941,6 +980,17 @@
     $('camasText').addEventListener('input', () => { S.camasSel = new Set(Calc.parseCamas($('camasText').value)); camasCambiaron(true); });
     $('camasAll').addEventListener('click', () => { S.camasSel = new Set(camasDelLote().map(c => c[2])); camasCambiaron(); });
     $('camasNone').addEventListener('click', () => { S.camasSel = new Set(); camasCambiaron(); });
+    ['click', 'focus'].forEach(ev => $('cantidad').addEventListener(ev, () => { if (usaCalculadora()) { $('cantidad').blur(); abrirCalc(); } }));
+    $('calcTeclas').addEventListener('click', ev => { const b = ev.target.closest('[data-k]'); if (b) teclaCalc(b.dataset.k); });
+    $('calcCerrar').addEventListener('click', cerrarCalc);
+    $('calcFondo').addEventListener('click', cerrarCalc);
+    $('calcUsar').addEventListener('click', () => {
+      const v = Calc.evaluar(calcExpr);
+      if (v == null) return;
+      $('cantidad').value = Math.round(v);
+      $('cantidad').dispatchEvent(new Event('input'));
+      cerrarCalc();
+    });
     $('cantidad').addEventListener('input', () => { S.cantManual = $('cantidad').value !== ''; actualizarCantHint(); recalcular(); });
     $('cantHint').addEventListener('click', ev => {
       if (ev.target.id === 'usarPlano') { ev.preventDefault(); S.cantManual = false; autoPlantas(); actualizarCantHint(); recalcular(); }

@@ -147,6 +147,7 @@
           </div>
         </div>
         <div class="field" id="camasField">
+          <div id="camasZona">
           <label class="f" id="camasLbl">Camas realizadas</label>
           <div class="camas-tools">
             <input type="text" id="camasText" placeholder="Ej: 1-10, 15, 18" inputmode="numeric">
@@ -155,6 +156,7 @@
           </div>
           <div class="camas-grid" id="camasGrid"></div>
           <div class="hint" id="camasHint">Elige bloque y lote para ver las camas.</div>
+          </div>
           <button type="button" class="btn small" id="tramoAdd" style="margin-top:10px">+ Añadir otro bloque o lote</button>
         </div>
         </div>
@@ -341,6 +343,21 @@
       <p class="hint">Borra los registros de este celular con fecha hasta ese día, de todas las áreas. Con "También de la hoja" sus filas se borran de la hoja de Google al sincronizar. No se puede deshacer.</p>
     </div>
   </main>
+
+  <!-- Calculadora para tallos y unidades -->
+  <div id="calcFondo" class="sheet-fondo"></div>
+  <div class="card calc-modal" id="calcModal" role="dialog" aria-label="Calculadora">
+    <div class="sheet-head"><h2 id="calcTitulo">Calculadora</h2><button type="button" class="btn small" id="calcCerrar">Cerrar</button></div>
+    <div class="calc-pantalla"><div class="calc-expr" id="calcExpr"></div><div class="calc-res" id="calcRes">0</div></div>
+    <div class="calc-teclas" id="calcTeclas">
+      <button type="button" data-k="C" class="t-fn">C</button><button type="button" data-k="(" class="t-fn">(</button><button type="button" data-k=")" class="t-fn">)</button><button type="button" data-k="/" class="t-op">÷</button>
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button><button type="button" data-k="*" class="t-op">×</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button><button type="button" data-k="-" class="t-op">−</button>
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button><button type="button" data-k="+" class="t-op">+</button>
+      <button type="button" data-k="0">0</button><button type="button" data-k=".">,</button><button type="button" data-k="B" class="t-fn">⌫</button><button type="button" data-k="=" class="t-op">=</button>
+    </div>
+    <button type="button" class="btn primary block" id="calcUsar" style="margin-top:12px">Usar este total</button>
+  </div>
 
   <div id="toast" class="toast hidden" role="status"></div>
   <div id="tip" class="tip hidden"></div>
