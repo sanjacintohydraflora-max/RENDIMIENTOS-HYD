@@ -166,9 +166,16 @@
   }
 
   // ---------- Formulario ----------
+  function marcarSinElegir(id, errId, revisar) {
+    const mal = revisar && !!$(id).value.trim();
+    $(id).classList.toggle('invalido', mal);
+    $(errId).classList.toggle('hidden', !mal);
+  }
+
   function elegirLabor(l) {
     S.labor = l;
     $('laborInput').value = l.nombre;
+    marcarSinElegir('laborInput', 'laborErr', false);
     actualizarLabor();
   }
 
@@ -232,7 +239,7 @@
   function elegirEmpleado(e) {
     const c = String(e.cedula);
     if (!S.sel.includes(c)) S.sel.push(c);
-    $('empInput').value = '';
+    $('empInput').value = ''; marcarSinElegir('empInput', 'empErr', false);
     pintarChips();
     $('empInput').focus();
   }
@@ -403,6 +410,7 @@
     const fin = $('hFin').value;
     S.sel = []; S.labor = null; S.camasSel = new Set(); S.tramos = []; S.editId = null; S.cantManual = false; S.editOriginal = null;
     $('laborInput').value = ''; $('empInput').value = ''; $('cantidad').value = ''; $('obs').value = '';
+    marcarSinElegir('laborInput', 'laborErr', false); marcarSinElegir('empInput', 'empErr', false);
     $('camasText').value = '';
     $('bloque').value = ''; llenarLotes();
     $('hInicio').value = mantener && fin ? fin : '';
@@ -460,7 +468,17 @@
     if (parcial) reg.horaFin = '';
     const errores = Calc.validar(reg, cfgA(), { parcial });
     if (!parcial && soloBloqueLote() && (!reg.tramos.length || reg.tramos.some(t => !t.bloque || !t.lote))) errores.push(`${S.labor.nombre}: elige bloque y lote.`);
-    if ($('laborInput').value && !S.labor) errores.unshift('La labor escrita no está en la lista; elígela de las sugerencias.');
+    if ($('laborInput').value && !S.labor) {
+      const i = errores.indexOf('Elige una labor de la lista.');
+      if (i >= 0) errores.splice(i, 1);
+      errores.unshift(`"${$('laborInput').value.trim()}" no está elegida; toca la labor en la lista de sugerencias.`);
+    }
+    if ($('empInput').value.trim()) {
+      const i = errores.indexOf('Agrega al menos un empleado.');
+      if (i >= 0) errores.splice(i, 1);
+      errores.unshift(`"${$('empInput').value.trim()}" no está elegido; toca a la persona en la lista o borra el texto.`);
+    }
+    marcarSinElegir('laborInput', 'laborErr', !S.labor); marcarSinElegir('empInput', 'empErr', true);
     const todos = await DB.allRegistros();
     const dias = !parcial && !S.editId && S.labor && Calc.esPorDias(S.labor.nombre) ? diasRango() : [reg.fecha];
     if ($('fechaHasta').value && $('fechaHasta').value < reg.fecha && dias.length <= 1) errores.push('La fecha final del rango es anterior a la fecha inicial.');
@@ -967,6 +985,11 @@
     autocompletar($('laborInput'), $('laborSuggest'), buscarLabores,
       (l, q) => `<div class="s-main">${marcar(l.nombre, q)}</div><div class="s-sub">${esc(l.medida)}</div>`, elegirLabor);
     $('laborInput').addEventListener('input', () => { if (S.labor && S.labor.nombre !== $('laborInput').value) { S.labor = null; actualizarLabor(); } });
+    // Se busca escribiendo parte del nombre, pero la labor y la persona solo cuentan si se eligen de la lista.
+    $('laborInput').addEventListener('blur', () => setTimeout(() => marcarSinElegir('laborInput', 'laborErr', !S.labor), 200));
+    $('laborInput').addEventListener('input', () => marcarSinElegir('laborInput', 'laborErr', false));
+    $('empInput').addEventListener('blur', () => setTimeout(() => marcarSinElegir('empInput', 'empErr', true), 200));
+    $('empInput').addEventListener('input', () => marcarSinElegir('empInput', 'empErr', false));
 
     autocompletar($('empInput'), $('empSuggest'), buscarEmpleados,
       (e, q) => `<div class="s-main">${marcar(e.nombre, q)}</div><div class="s-sub">${marcar(e.cedula, q)} · ${esc(e.cargo || '')} · ${esc(e.area || e.lugar || '')}</div>`, elegirEmpleado);

@@ -393,3 +393,7 @@ form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(
 }
 .calc-teclas .t-op { background: var(--brand-soft); color: var(--brand); }
 .calc-teclas .t-fn { color: var(--text-2); }
+
+/* Labor o empleado escrito sin elegirlo de la lista */
+input.invalido { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
+.err-pick { color: var(--bad); font-size: 13px; margin-top: 4px; }
