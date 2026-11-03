@@ -183,7 +183,7 @@
     const l = S.labor;
     const tipo = l ? Calc.tipoMedida(l.medida) : 'tiempo';
     $('laborInfo').innerHTML = l
-      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : Calc.tienePlano(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
+      ? `${badgeMedida(l.medida)} ${tipo === 'plantas' ? 'Requiere bloque, lote, camas y plantas.' : tipo === 'tallos' ? 'Requiere número de tallos.' : tipo === 'unidades' ? 'Requiere número de unidades.' : soloBloqueLote() ? 'Se mide en tiempo; requiere bloque y lote.' : Calc.tienePlano(S.area) ? 'Se mide en tiempo; camas opcionales.' : 'Se mide en tiempo.'}${Calc.esGrupalPorMedida(l.medida) ? ' Labor grupal: agrega a todos los participantes.' : ''}`
       : '';
     const reqPl = tipo === 'plantas';
     const soloBL = soloBloqueLote();
@@ -283,7 +283,9 @@
 
   // Bloque/lote/camas que están marcados ahora en el selector (aún no añadidos a la lista).
   // Cortar flor (labor en tallos de un cultivo con plano) pide bloque y lote, pero no camas.
-  const soloBloqueLote = () => !!S.labor && Calc.tienePlano(S.area) && Calc.tipoMedida(S.labor.medida) === 'tallos';
+  // Cortar flor (tallos) y fumigar piden bloque y lote, sin camas.
+  const soloBloqueLote = () => !!S.labor && Calc.tienePlano(S.area)
+    && (Calc.tipoMedida(S.labor.medida) === 'tallos' || /FUMIG/.test(Calc.norm(S.labor.nombre)));
   // Tallos y unidades se digitan con la calculadora.
   const usaCalculadora = () => !!S.labor && ['tallos', 'unidades'].includes(Calc.tipoMedida(S.labor.medida));
 
