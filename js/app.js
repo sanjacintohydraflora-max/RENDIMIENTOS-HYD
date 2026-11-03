@@ -448,8 +448,8 @@
     $('editBanner').classList.remove('hidden');
     $('editBanner').querySelector('.badge').textContent = abierto ? 'Terminando registro' : 'Editando registro';
     $('saveBtn').textContent = abierto ? 'Terminar registro' : 'Guardar cambios';
-    $('savePartial').classList.toggle('hidden', !abierto); $('partialHint').classList.toggle('hidden', !abierto);
-    $('saveNext').classList.toggle('hidden', !abierto);
+    $('savePartial').classList.remove('hidden'); $('partialHint').classList.remove('hidden');
+    $('saveNext').classList.remove('hidden');
     if (abierto && !r.horaFin) setTimeout(() => $('hFin').focus(), 50);
     pintarAbiertos();
     mostrar('registrar');
