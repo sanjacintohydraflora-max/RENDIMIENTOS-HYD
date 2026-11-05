@@ -9,7 +9,7 @@ const Calc = (() => {
     'AÑO', 'MES', 'SEM', 'FECHA', 'AREA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
     'HRA INICIO', 'HRA FIN', 'HORAS TOTALES', 'DESAYUNO', 'PAUSAS', 'ALMUERZO', 'TIEMPO LAB',
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
-    'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO',
+    'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO', 'HORAS EXTRAS',
   ];
 
   // Áreas de la empresa. Los dos cultivos comparten labores pero cada uno tiene su plano de producción.
@@ -54,6 +54,18 @@ const Calc = (() => {
     const h = horarioDia(cfgArea, fecha);
     if (!h) return 0;
     return r2(calcular({ horaInicio: h[0], horaFin: h[1], ...descuentosAuto(h[0], h[1], cfgArea), empleados: [] }, cfgArea, null).tiempoLab);
+  }
+  // Minutos que la hora de fin pasa la hora de salida del horario del área (0 si no la pasa o ese día no tiene horario).
+  function minutosExtra(reg, cfgArea) {
+    const h = reg.fecha && horarioDia(cfgArea, reg.fecha), b = minutos(reg.horaFin);
+    if (!h || b == null || esPorDias(reg.labor)) return 0;
+    return Math.max(0, b - minutos(h[1]));
+  }
+  // Horas de esta labor que caen después de la salida (solo el tramo propio de la labor).
+  function horasExtra(reg, cfgArea) {
+    const h = reg.fecha && cfgArea && horarioDia(cfgArea, reg.fecha), a = minutos(reg.horaInicio), b = minutos(reg.horaFin);
+    if (!h || a == null || b == null || b <= a || esPorDias(reg.labor)) return 0;
+    return Math.max(0, b - Math.max(a, minutos(h[1]))) / 60;
   }
   const esCultivo = id => areaInfo(id).grupo === 'CULTIVO';
   const tienePlano = id => !!areaInfo(id).sede;
@@ -172,6 +184,7 @@ const Calc = (() => {
     const almuerzo = reg.almuerzo ? r2(cfg.almuerzoMin / 60) : 0;
     const pausa = reg.pausa ? r2((reg.pausaMin ?? cfg.pausaMin) / 60) : 0;
     const tiempoLab = Math.max(0, horasTotales - desayuno - almuerzo - pausa);
+    const extras = horasExtra(reg, cfg);
     const personas = reg.empleados || [];
     const n = personas.length;
     const tipo = tipoMedida(reg.medida);
@@ -198,9 +211,10 @@ const Calc = (() => {
         'LOTE': t.lote || '', 'CAMAS': formatCamas(t.camas || []), 'N CAMAS': (t.camas || []).length,
         'GRUPAL': n > 1 ? 'SI' : 'NO', 'N PERSONAS': n, 'CANTIDAD GRUPO': total, 'LIDER': reg.lider || '',
         'ID REGISTRO': reg.id, 'ID FILA': partes.length > 1 ? `${reg.id}-${ced}-${i + 1}` : `${reg.id}-${ced}`, 'ACTUALIZADO': reg.actualizado || '',
+        'HORAS EXTRAS': r2(extras * w),
       };
     }));
-    return { horasTotales, desayuno, almuerzo, pausa, tiempoLab, n, tipo, total, porPersona, rendimiento, filas };
+    return { horasTotales, desayuno, almuerzo, pausa, tiempoLab, extras, n, tipo, total, porPersona, rendimiento, filas };
   }
 
   // Devuelve una lista de errores en español; vacía si el registro se puede guardar.
@@ -227,6 +241,8 @@ const Calc = (() => {
     }
     if (tipo === 'tallos' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en tallos: digita los tallos.');
     if (tipo === 'unidades' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en unidades: digita las unidades.');
+    const extra = cfg ? minutosExtra(reg, cfg) : 0;
+    if (extra > 0 && !reg.extras) e.push(`La hora de fin pasa ${extra} min la salida de las ${horarioDia(cfg, reg.fecha)[1]}: marca "Horas extras" para guardarlo.`);
     if (cfg && a != null && b != null && b > a) {
       const c = calcular(reg, cfg, null);
       if (c.tiempoLab <= 0) e.push('Con los descuentos marcados el tiempo laborado queda en cero.');
@@ -326,6 +342,6 @@ const Calc = (() => {
     });
   }
 
-  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, minutosExtra, horasExtra, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

@@ -384,6 +384,7 @@
       desayuno: $('dDesayuno').checked,
       almuerzo: $('dAlmuerzo').checked,
       pausa: $('dPausa').checked,
+      extras: $('extras').checked,
       tramos: tramosFormulario(),
       cantidad: $('cantidad').value === '' ? null : Number($('cantidad').value),
       obs: $('obs').value.trim(),
@@ -393,8 +394,21 @@
     return reg;
   }
 
+  // Avisa cuando la hora de fin pasa la salida: entonces "Horas extras" es obligatoria.
+  function pintarExtras(reg) {
+    const extra = Calc.minutosExtra(reg, cfgA());
+    const h = reg.fecha && Calc.horarioDia(cfgA(), reg.fecha);
+    const falta = extra > 0 && !reg.extras;
+    $('extrasLbl').classList.toggle('falta', falta);
+    $('extrasHint').classList.toggle('falta', falta);
+    $('extrasHint').textContent = extra > 0
+      ? `Pasa ${extra} min la salida de las ${h[1]}.${falta ? ' Marca Horas extras para poder guardar.' : ''}`
+      : h ? `Salida del horario: ${h[1]}. Después de esa hora es obligatorio marcar Horas extras.` : '';
+  }
+
   function recalcular() {
     const reg = leerFormulario();
+    pintarExtras(reg);
     const box = $('calc');
     if (!reg.labor || !reg.empleados.length || !reg.horaInicio || !reg.horaFin) {
       box.innerHTML = `<div class="empty" style="padding:8px">${reg.horaInicio && !reg.horaFin ? 'Sin hora de fin: puedes guardarlo sin terminar y completarlo después.' : 'Completa la labor, las personas y el horario.'}</div>`;
@@ -413,7 +427,7 @@
     S.sel = []; S.labor = null; S.camasSel = new Set(); S.tramos = []; S.editId = null; S.cantManual = false; S.editOriginal = null;
     $('laborInput').value = ''; $('empInput').value = ''; $('cantidad').value = ''; $('obs').value = '';
     marcarSinElegir('laborInput', 'laborErr', false); marcarSinElegir('empInput', 'empErr', false);
-    $('camasText').value = '';
+    $('camasText').value = ''; $('extras').checked = false;
     $('bloque').value = ''; llenarLotes();
     $('hInicio').value = mantener && fin ? fin : '';
     $('hFin').value = '';
@@ -445,6 +459,7 @@
     $('obs').value = r.obs || '';
     pintarCamas(); camasCambiaron();
     $('dDesayuno').checked = !!r.desayuno; $('dAlmuerzo').checked = !!r.almuerzo; $('dPausa').checked = !!r.pausa;
+    $('extras').checked = !!r.extras;
     pintarChips(); actualizarLabor();
     const abierto = r.estado === 'abierto';
     $('editBanner').classList.remove('hidden');
@@ -668,7 +683,7 @@
       ].filter(Boolean).join(' · ');
       return `<div class="reg">
         <div class="r-main">
-          <div class="r-t">${esc(r.labor)} ${r.empleados.length > 1 ? `<span class="badge gr">Grupo ${r.empleados.length}</span>` : ''}</div>
+          <div class="r-t">${esc(r.labor)} ${r.empleados.length > 1 ? `<span class="badge gr">Grupo ${r.empleados.length}</span>` : ''}${r.extras ? ' <span class="badge tallos">Horas extras</span>' : ''}</div>
           <div class="r-s">${esc(nombres)}</div>
           <div class="r-s">${esc(det)}</div>
           ${r.obs ? `<div class="r-s">${esc(r.obs)}</div>` : ''}
@@ -1004,7 +1019,7 @@
       $(b.dataset.now).value = ahoraStr(); aplicarDescuentosAuto(); recalcular();
     }));
     ['hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', () => { aplicarDescuentosAuto(); recalcular(); }));
-    ['dDesayuno', 'dAlmuerzo', 'dPausa'].forEach(id => $(id).addEventListener('change', recalcular));
+    ['dDesayuno', 'dAlmuerzo', 'dPausa', 'extras'].forEach(id => $(id).addEventListener('change', recalcular));
 
     $('bloque').addEventListener('change', () => { llenarLotes(); S.camasSel = new Set(); pintarCamas(); camasCambiaron(); });
     $('lote').addEventListener('change', () => { S.camasSel = new Set(); pintarCamas(); camasCambiaron(); });

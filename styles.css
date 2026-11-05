@@ -396,3 +396,8 @@ form.bloqueado input:disabled, form.bloqueado select:disabled { background: var(
 /* Labor o empleado escrito sin elegirlo de la lista */
 input.invalido { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
 .err-pick { color: var(--bad); font-size: 13px; margin-top: 4px; }
+
+/* Horas extras: obligatoria cuando la hora de fin pasa la salida del horario */
+.extras-check { display: inline-flex; }
+.extras-check.falta { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
+#extrasHint.falta { color: var(--bad); }

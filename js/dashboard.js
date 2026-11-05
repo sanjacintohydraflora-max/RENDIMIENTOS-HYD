@@ -183,9 +183,12 @@ const Dashboard = (() => {
     const unidades = filas.filter(f => tipo(f) === 'unidades').reduce((s, f) => s + Number(f.CANTIDAD || 0), 0);
     const hMedidas = filas.filter(f => tipo(f) !== 'tiempo').reduce((s, f) => s + Number(f['TIEMPO LAB'] || 0), 0);
     const dias = new Set(filas.map(f => f.FECHA)).size;
+    const extras = filas.reduce((s, f) => s + Number(f['HORAS EXTRAS'] || 0), 0);
+    const conExtras = new Set(filas.filter(f => Number(f['HORAS EXTRAS']) > 0).map(f => f.CEDULA)).size;
     $('kpis').innerHTML = [
       ['Horas laboradas', fmt(horas, 1), `${dias} días con registros`],
       ['Personas', fmt(personas), `${filas.length} filas de rendimiento`],
+      extras ? ['Horas extras', fmt(extras, 2), `${conExtras} persona${conExtras > 1 ? 's' : ''} después de la salida`] : null,
       ['Plantas trabajadas', fmt(plantas), 'labores medidas en plantas'],
       ['Tallos', fmt(tallos), 'labores medidas en tallos'],
       unidades ? ['Unidades', fmt(unidades), 'labores medidas en unidades'] : null,
