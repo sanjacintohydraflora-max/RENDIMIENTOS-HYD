@@ -213,14 +213,14 @@
 
   function diasRango() {
     const desde = $('fecha').value, hasta = $('fechaHasta').value;
-    if (!desde || !hasta || hasta <= desde) return [desde].filter(Boolean);
-    return Calc.diasDelRango(desde, hasta, $('rangoSabados').checked);
+    if (!desde || !hasta || hasta <= desde) return [desde].filter(d => d && !Calc.motivoExtra(d));
+    return Calc.diasDelRango(desde, hasta, false);
   }
 
   function pintarRango() {
     const dias = diasRango();
     $('rangoHint').textContent = $('fechaHasta').value && $('fechaHasta').value > $('fecha').value
-      ? `Se crearán ${dias.length} registros, uno por día hábil (${$('rangoSabados').checked ? 'lunes a sábado' : 'lunes a viernes'}), con el horario de cada día del área.`
+      ? `Se crearán ${dias.length} registros, uno por día hábil (lunes a viernes, sin festivos), con el horario de cada día del área.`
       : 'Para varios días, pon el último día. Si es un solo día, déjalo vacío.';
   }
 
@@ -500,7 +500,7 @@
     const todos = await DB.allRegistros();
     const dias = !parcial && !S.editId && S.labor && Calc.esPorDias(S.labor.nombre) ? diasRango() : [reg.fecha];
     if ($('fechaHasta').value && $('fechaHasta').value < reg.fecha && dias.length <= 1) errores.push('La fecha final del rango es anterior a la fecha inicial.');
-    if (!dias.length) errores.push('El rango no tiene días hábiles.');
+    if (!dias.length) errores.push('Vacaciones, incapacidades y ausencias por días no se registran en sábados, domingos ni festivos.');
     // No se empieza otro día mientras queden registros sin terminar de días anteriores.
     const nombre = c => S.empMap[c]?.nombre || reg.nombres?.[c] || c;
     // Mientras haya un día incompleto (antes o después), no se escribe en otra fecha.
@@ -1123,7 +1123,7 @@
     subir('btnPlanoCeja', 'filePlanoCeja', async f => { const r = await importarPlano(f, 'LA CEJA'); return { n: r.length, nota: await alServidor('camas', S.camasTodas) }; },
       r => `${r.n} camas cargadas del plano de La Ceja.${r.nota}`);
 
-    ['fecha', 'fechaHasta', 'rangoSabados', 'hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', pintarRango));
+    ['fecha', 'fechaHasta', 'hInicio', 'hFin'].forEach(id => $(id).addEventListener('change', pintarRango));
 
     $('cHorario').addEventListener('change', () => pintarHorario());
     $('horarioForm').addEventListener('input', () => pintarHorario(true));
