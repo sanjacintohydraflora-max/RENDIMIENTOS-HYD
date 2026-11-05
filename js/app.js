@@ -401,8 +401,9 @@
     const falta = extra > 0 && !reg.extras;
     $('extrasLbl').classList.toggle('falta', falta);
     $('extrasHint').classList.toggle('falta', falta);
-    $('extrasHint').textContent = extra > 0
-      ? `Pasa ${extra} min la salida de las ${h[1]}.${falta ? ' Marca Horas extras para poder guardar.' : ''}`
+    const motivo = Calc.motivoExtra(reg.fecha);
+    $('extrasHint').textContent = motivo ? `Es ${motivo}: todo el tiempo trabajado es extra.${falta ? ' Marca Horas extras para poder guardar.' : ''}`
+      : extra > 0 ? `Pasa ${extra} min la salida de las ${h[1]}.${falta ? ' Marca Horas extras para poder guardar.' : ''}`
       : h ? `Salida del horario: ${h[1]}. Después de esa hora es obligatorio marcar Horas extras.` : '';
   }
 

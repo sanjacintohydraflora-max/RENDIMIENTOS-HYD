@@ -48,7 +48,30 @@ const Calc = (() => {
     return { ...cfg, ...HORARIOS[k], ...(cfg.horarios?.[k] || {}), horarioId: k };
   }
   const diaSemana = fecha => { const [y, m, d] = fecha.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); };
-  const horarioDia = (cfgArea, fecha) => cfgArea.dias?.[diaSemana(fecha)] || null;
+  // Festivos de Colombia: fijos, los que se corren al lunes (Ley Emiliani) y los que dependen de la Pascua.
+  const festivosCache = {};
+  function festivos(y) {
+    if (festivosCache[y]) return festivosCache[y];
+    const f = d => d.toISOString().slice(0, 10);
+    const dia = (m, d) => new Date(Date.UTC(y, m - 1, d));
+    const lunes = d => { const x = new Date(d); while (x.getUTCDay() !== 1) x.setUTCDate(x.getUTCDate() + 1); return x; };
+    const mas = (d, n) => { const x = new Date(d); x.setUTCDate(x.getUTCDate() + n); return x; };
+    // Domingo de Pascua (algoritmo de Meeus/Butcher)
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, dd = Math.floor(b / 4), e = b % 4, g = Math.floor((8 * b + 13) / 25);
+    const h = (19 * a + b - dd - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const mm = Math.floor((a + 11 * h + 19 * l) / 433), mes = Math.floor((h + l - 7 * mm + 90) / 25), d = (h + l - 7 * mm + 33 * mes + 19) % 32;
+    const pascua = dia(mes, d);
+    const lista = [
+      dia(1, 1), dia(5, 1), dia(7, 20), dia(8, 7), dia(12, 8), dia(12, 25),
+      ...[[1, 6], [3, 19], [6, 29], [8, 15], [10, 12], [11, 1], [11, 11]].map(([m2, d2]) => lunes(dia(m2, d2))),
+      mas(pascua, -3), mas(pascua, -2), mas(pascua, 43), mas(pascua, 64), mas(pascua, 71),
+    ];
+    return (festivosCache[y] = new Set(lista.map(f)));
+  }
+  const esFestivo = fecha => !!fecha && festivos(Number(fecha.slice(0, 4))).has(fecha);
+  // Sábado, domingo o festivo: todo el tiempo trabajado es extra.
+  const motivoExtra = fecha => !fecha ? '' : esFestivo(fecha) ? 'festivo' : ({ 0: 'domingo', 6: 'sábado' })[diaSemana(fecha)] || '';
+  const horarioDia = (cfgArea, fecha) => (esFestivo(fecha) ? null : cfgArea.dias?.[diaSemana(fecha)] || null);
   // Horas productivas esperadas ese día; 0 si el área no trabaja ese día (no se revisa).
   function jornadaDia(cfgArea, fecha) {
     const h = horarioDia(cfgArea, fecha);
@@ -57,15 +80,20 @@ const Calc = (() => {
   }
   // Minutos que la hora de fin pasa la hora de salida del horario del área (0 si no la pasa o ese día no tiene horario).
   function minutosExtra(reg, cfgArea) {
-    const h = reg.fecha && horarioDia(cfgArea, reg.fecha), b = minutos(reg.horaFin);
-    if (!h || b == null || esPorDias(reg.labor)) return 0;
-    return Math.max(0, b - minutos(h[1]));
+    const a = minutos(reg.horaInicio), b = minutos(reg.horaFin);
+    if (!reg.fecha || b == null || esPorDias(reg.labor)) return 0;
+    if (motivoExtra(reg.fecha)) return a != null && b > a ? b - a : 0;
+    const h = horarioDia(cfgArea, reg.fecha);
+    return h ? Math.max(0, b - minutos(h[1])) : 0;
   }
   // Horas de esta labor que caen después de la salida (solo el tramo propio de la labor).
-  function horasExtra(reg, cfgArea) {
-    const h = reg.fecha && cfgArea && horarioDia(cfgArea, reg.fecha), a = minutos(reg.horaInicio), b = minutos(reg.horaFin);
-    if (!h || a == null || b == null || b <= a || esPorDias(reg.labor)) return 0;
-    return Math.max(0, b - Math.max(a, minutos(h[1]))) / 60;
+  // En sábado, domingo o festivo es todo el tiempo laborado de la labor.
+  function horasExtra(reg, cfgArea, tiempoLab = 0) {
+    const a = minutos(reg.horaInicio), b = minutos(reg.horaFin);
+    if (!reg.fecha || a == null || b == null || b <= a || esPorDias(reg.labor)) return 0;
+    if (motivoExtra(reg.fecha)) return tiempoLab;
+    const h = cfgArea && horarioDia(cfgArea, reg.fecha);
+    return h ? Math.max(0, b - Math.max(a, minutos(h[1]))) / 60 : 0;
   }
   const esCultivo = id => areaInfo(id).grupo === 'CULTIVO';
   const tienePlano = id => !!areaInfo(id).sede;
@@ -120,7 +148,7 @@ const Calc = (() => {
       const s = dt.toISOString().slice(0, 10);
       if (s > hasta) break;
       const dow = dt.getUTCDay();
-      if (dow !== 0 && (dow !== 6 || sabados)) out.push(s);
+      if (dow !== 0 && (dow !== 6 || sabados) && !esFestivo(s)) out.push(s);
       dt.setUTCDate(dt.getUTCDate() + 1);
     }
     return out;
@@ -184,7 +212,7 @@ const Calc = (() => {
     const almuerzo = reg.almuerzo ? r2(cfg.almuerzoMin / 60) : 0;
     const pausa = reg.pausa ? r2((reg.pausaMin ?? cfg.pausaMin) / 60) : 0;
     const tiempoLab = Math.max(0, horasTotales - desayuno - almuerzo - pausa);
-    const extras = horasExtra(reg, cfg);
+    const extras = horasExtra(reg, cfg, tiempoLab);
     const personas = reg.empleados || [];
     const n = personas.length;
     const tipo = tipoMedida(reg.medida);
@@ -242,7 +270,9 @@ const Calc = (() => {
     if (tipo === 'tallos' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en tallos: digita los tallos.');
     if (tipo === 'unidades' && !(Number(reg.cantidad) > 0)) e.push('Esta labor se mide en unidades: digita las unidades.');
     const extra = cfg ? minutosExtra(reg, cfg) : 0;
-    if (extra > 0 && !reg.extras) e.push(`La hora de fin pasa ${extra} min la salida de las ${horarioDia(cfg, reg.fecha)[1]}: marca "Horas extras" para guardarlo.`);
+    if (extra > 0 && !reg.extras) e.push(motivoExtra(reg.fecha)
+      ? `El ${reg.fecha.split('-').reverse().join('/')} es ${motivoExtra(reg.fecha)}: todo el tiempo es extra, marca "Horas extras" para guardarlo.`
+      : `La hora de fin pasa ${extra} min la salida de las ${horarioDia(cfg, reg.fecha)[1]}: marca "Horas extras" para guardarlo.`);
     if (cfg && a != null && b != null && b > a) {
       const c = calcular(reg, cfg, null);
       if (c.tiempoLab <= 0) e.push('Con los descuentos marcados el tiempo laborado queda en cero.');
@@ -342,6 +372,6 @@ const Calc = (() => {
     });
   }
 
-  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, minutosExtra, horasExtra, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, minutosExtra, horasExtra, esFestivo, motivoExtra, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;
