@@ -8,7 +8,7 @@ const Dashboard = (() => {
   const corto = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const numSort = (a, b) => parseFloat(String(a).replace(/[^\d.]/g, '')) - parseFloat(String(b).replace(/[^\d.]/g, '')) || String(a).localeCompare(String(b));
 
-  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '';
+  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '';
 
   // ---------- Datos ----------
   function rango(tipo) {
@@ -280,6 +280,68 @@ const Dashboard = (() => {
     $('selTend')?.addEventListener('change', e => { laborTend = e.target.value; render(); });
   }
 
+  // Distribución del tiempo de una persona (o del equipo) por día, semana o mes, apilado por labor.
+  const SERIES = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)', 'var(--cat-7)'];
+  function distribucion(filas) {
+    const pers = [...new Map(filas.map(f => [String(f.CEDULA), f.NOMBRE])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    if ($('fPersona').value) distPersona = $('fPersona').value;
+    if (distPersona && !pers.some(([c]) => c === distPersona)) distPersona = '';
+    const fl = filas.filter(f => !distPersona || String(f.CEDULA) === distPersona);
+    const clave = f => distPeriodo === 'mes' ? f.FECHA.slice(0, 7)
+      : distPeriodo === 'semana' ? `${f.FECHA.slice(0, 4)}-S${String(f.SEM || Calc.semanaISO(f.FECHA)).padStart(2, '0')}` : f.FECHA;
+    const etiqueta = k => distPeriodo === 'mes' ? `${MESES[+k.slice(5) - 1].slice(0, 3)} ${k.slice(2, 4)}`
+      : distPeriodo === 'semana' ? `Sem ${+k.slice(6)}` : `${k.slice(8)}/${k.slice(5, 7)}`;
+    // Las 7 labores con más horas tienen color propio; el resto va a "Otras".
+    const totLab = {};
+    fl.forEach(f => { totLab[f.LABOR] = (totLab[f.LABOR] || 0) + Number(f['TIEMPO LAB'] || 0); });
+    const orden = Object.entries(totLab).sort((a, b) => b[1] - a[1]).map(([l]) => l);
+    const top = orden.slice(0, orden.length > 8 ? 7 : 8);
+    const serie = l => (top.includes(l) ? l : 'Otras');
+    const series = [...top, ...(orden.length > top.length ? ['Otras'] : [])];
+    const color = s => (s === 'Otras' ? 'var(--text-3)' : top.length === 8 && s === top[7] ? 'var(--cat-8)' : SERIES[top.indexOf(s)]);
+    const g = {};
+    fl.forEach(f => { const k = clave(f); const b = g[k] ||= {}; const s = serie(f.LABOR); b[s] = (b[s] || 0) + Number(f['TIEMPO LAB'] || 0); });
+    const claves = Object.keys(g).sort();
+    const nPers = distPersona ? 1 : new Set(fl.map(f => f.CEDULA)).size;
+    const quien = distPersona ? (pers.find(([c]) => c === distPersona)?.[1] || '') : `todo el equipo (${nPers} personas)`;
+    const controles = `<div class="btn-row" style="gap:8px;align-items:center">
+      <div class="seg" id="distSeg">${[['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']].map(([v, t]) => `<button type="button" data-p="${v}" class="${v === distPeriodo ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <select id="distPersona" style="min-height:38px;font-size:14px;padding:6px 8px;width:auto;max-width:240px"><option value="">Todo el equipo</option>${pers.map(([c, n]) => `<option value="${esc(c)}" ${c === distPersona ? 'selected' : ''}>${esc(corto(n, 30))}</option>`).join('')}</select></div>`;
+    let cuerpo;
+    if (!claves.length) cuerpo = '<div class="empty">Sin datos en este filtro.</div>';
+    else {
+      const ancho = anchoDe('cDistrib'), alto = 260, l = 44, r = 8, t = 14, b = 30;
+      const totales = claves.map(k => Object.values(g[k]).reduce((a, x) => a + x, 0));
+      const ticks = ejeTicks(Math.max(...totales));
+      const Y = v => t + (1 - v / ticks.at(-1)) * (alto - t - b);
+      const paso = (ancho - l - r) / claves.length, bw = Math.max(3, Math.min(44, paso * 0.62));
+      const grid = ticks.map(v => `<line class="grid" x1="${l}" x2="${ancho - r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${l - 6}" y="${Y(v) + 4}" text-anchor="end">${fmt(v, v % 1 ? 1 : 0)}</text>`).join('');
+      const salto = Math.ceil(claves.length / Math.max(3, Math.floor(ancho / 56)));
+      const barras = claves.map((k, i) => {
+        const x = l + i * paso + (paso - bw) / 2;
+        let base = 0;
+        const segs = series.filter(s => g[k][s]);
+        const rects = segs.map((s, j) => {
+          const v = g[k][s], y0 = Y(base), y1 = Y(base + v);
+          base += v;
+          const h = Math.max(1, y0 - y1 - (j ? 2 : 0));
+          const yTop = y0 - (j ? 2 : 0) - h;
+          return j === segs.length - 1 && h > 6
+            ? `<path d="M${x} ${yTop + h} v${-(h - 4)} a4 4 0 0 1 4 -4 h${bw - 8} a4 4 0 0 1 4 4 v${h - 4} z" fill="${color(s)}"/>`
+            : `<rect x="${x}" y="${yTop}" width="${bw}" height="${h}" fill="${color(s)}"/>`;
+        }).join('');
+        const tip = [`${etiqueta(k)} · ${fmt(totales[i], 2)} h${nPers > 1 ? ` (${nPers} personas)` : ''}`, ...segs.map(s => `${s}: ${fmt(g[k][s], 2)} h · ${fmt((g[k][s] / totales[i]) * 100)}%`)].join('\n');
+        const lbl = i % salto === 0 || i === claves.length - 1 ? `<text x="${x + bw / 2}" y="${alto - 10}" text-anchor="middle">${esc(etiqueta(k))}</text>` : '';
+        return `<g data-tip="${esc(tip)}"><rect x="${l + i * paso}" y="${t}" width="${paso}" height="${alto - t - b}" fill="transparent"/>${rects}</g>${lbl}`;
+      }).join('');
+      const leyenda = `<div class="legend" style="margin-top:10px">${series.map(s => `<span><i style="background:${color(s)}"></i>${esc(corto(s, 34))} · ${fmt(s === 'Otras' ? orden.slice(top.length).reduce((a, x) => a + totLab[x], 0) : totLab[s], 1)} h</span>`).join('')}</div>`;
+      cuerpo = leyenda + `<svg class="chart" viewBox="0 0 ${ancho} ${alto}" role="img" aria-label="Horas por labor">${grid}<line class="axis" x1="${l}" x2="${ancho - r}" y1="${Y(0)}" y2="${Y(0)}"/>${barras}</svg>`;
+    }
+    $('cDistrib').innerHTML = encabezado(`Distribución del tiempo · ${quien}`, `Horas laboradas por ${distPeriodo === 'dia' ? 'día' : distPeriodo}, separadas por labor. Toca una barra para ver el detalle.`, controles) + cuerpo;
+    $('distSeg').addEventListener('click', e => { const bt = e.target.closest('[data-p]'); if (bt) { distPeriodo = bt.dataset.p; render(); } });
+    $('distPersona').addEventListener('change', e => { distPersona = e.target.value; if ($('fPersona').value && distPersona !== $('fPersona').value) $('fPersona').value = ''; render(); });
+  }
+
   function revision(filas) {
     const dias = [...new Set(filas.map(f => f.FECHA))].sort();
     const g = {};
@@ -349,7 +411,7 @@ const Dashboard = (() => {
     const filas = filtrar(todas);
     ultimas = filas;
     pintarResumen();
-    kpis(filas); promMax(filas); horasLabor(filas); porPersona(filas); tendencia(filas); revision(filas); bloques(filas);
+    kpis(filas); promMax(filas); horasLabor(filas); porPersona(filas); distribucion(filas); tendencia(filas); revision(filas); bloques(filas);
   }
 
   // Resumen de filtros (celular) y número de filtros activos en el botón flotante.

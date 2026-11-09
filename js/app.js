@@ -622,6 +622,7 @@
         <span class="cad-h">${fechaCorta(p.fecha).slice(0, 5)}</span>
         <span class="cad-l"><b>${esc(S.empMap[p.ced]?.nombre || p.nombre)}</b>
         <small>${fmt(p.horas, 2)} h laboradas${p.meta ? ` de ${fmt(p.meta, 2)}` : ` (${Calc.motivoExtra(p.fecha) || 'sin jornada'})`} · <span class="flag-low">${fmt(p.extra, 2)} h extras</span></small></span>
+        <button type="button" class="btn small" data-extras-editar="${i}">Editar</button>
         <button type="button" class="btn small primary" data-extras="${i}">Confirmar</button>
       </div>`).join('');
     return lista;
@@ -648,10 +649,12 @@
     if (!lista.length) return lista;
     const lideres = [...new Set(lista.map(c => c.lider))];
     $('crucesTitulo').textContent = `${lideres.length > 1 ? 'Otros líderes registraron' : `${lideres[0]} registró`} a las mismas personas`;
-    $('crucesLista').innerHTML = lista.map(c => `<div class="cad-item">
+    S.crucesPend = lista;
+    $('crucesLista').innerHTML = lista.map((c, i) => `<div class="cad-item">
         <span class="cad-h">${fechaCorta(c.fecha).slice(0, 5)} ${esc(c.inicio)}</span>
         <span class="cad-l"><b>${esc(S.empMap[c.ced]?.nombre || c.nombre)}</b>
         <small>${esc(c.labor)} ${esc(c.inicio)}–${esc(c.fin)} · registró <b>${esc(c.lider)}</b>${c.area ? ` (${esc(c.area)})` : ''}${c.cruza ? ' · <span class="flag-high">horario cruzado con el tuyo</span>' : ''}</small></span>
+        <button type="button" class="btn small" data-cruce-editar="${i}">Editar</button>
       </div>`).join('');
     return lista;
   }
@@ -662,6 +665,18 @@
     await DB.setMeta('crucesVistos', [...new Set([...vistos, ...lista.map(c => c.id)])].slice(-2000));
     await DB.setMeta('cruces', []);
     pintarAbiertos();
+  }
+
+  // Desde un aviso: abre el día de esa persona y carga para editar su labor (la que se cruza, si se indica).
+  async function editarDePersona(ced, fecha, ini, fin) {
+    await completarDia(ced, fecha);
+    if (S.editId) return;
+    const regs = await registrosCadena();
+    const a = Calc.minutos(ini), b = Calc.minutos(fin);
+    const r = regs.find(x => a != null && b != null && Calc.minutos(x.horaInicio) < b && a < (Calc.minutos(x.horaFin) ?? 1440))
+      || (regs.length === 1 ? regs[0] : null);
+    if (r) cargarEnFormulario(r.id);
+    else toast('Elige en la lista de arriba la labor que quieres editar.', 3500);
   }
 
   // Lleva el formulario al día pendiente con esa persona elegida.
@@ -1135,6 +1150,12 @@
     });
     $('extrasLista').addEventListener('click', ev => {
       const b = ev.target.closest('[data-extras]'); if (b) confirmarExtras([S.extrasPend[+b.dataset.extras]]);
+      const e = ev.target.closest('[data-extras-editar]');
+      if (e) { const p = S.extrasPend[+e.dataset.extrasEditar]; editarDePersona(p.ced, p.fecha); }
+    });
+    $('crucesLista').addEventListener('click', ev => {
+      const e = ev.target.closest('[data-cruce-editar]');
+      if (e) { const c = S.crucesPend[+e.dataset.cruceEditar]; editarDePersona(c.ced, c.fecha, c.inicio, c.fin); }
     });
     $('extrasTodas').addEventListener('click', () => confirmarExtras(S.extrasPend));
     $('crucesOk').addEventListener('click', crucesRevisados);

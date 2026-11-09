@@ -12,6 +12,8 @@
   --brand-soft: #e3eef8;
   --series-1: #1f86c4;
   --series-1-soft: #cfe6f4;
+  /* Colores por categoría (labores) en gráficos apilados */
+  --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948;
   --good: #1f7a3a;
   --warn: #b26b00;
   --warn-soft: #fff1d6;
@@ -38,6 +40,7 @@
     --brand-soft: #13304a;
     --series-1: #3ea0dc;
     --series-1-soft: #164a70;
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
     --good: #5cbf73;
     --warn: #e0a33c;
     --warn-soft: #3a2e17;
@@ -50,7 +53,7 @@
   color-scheme: dark;
   --bg: #10161c; --surface: #18212a; --surface-2: #212c36; --border: #33414e;
   --text: #ecf1f5; --text-2: #bcc7d1; --text-3: #8f9ba6; --brand: #5aa9e6; --brand-ink: #08182a;
-  --brand-soft: #13304a; --series-1: #3ea0dc; --series-1-soft: #164a70; --good: #5cbf73;
+  --brand-soft: #13304a; --series-1: #3ea0dc; --series-1-soft: #164a70; --good: #5cbf73; --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
   --warn: #e0a33c; --warn-soft: #3a2e17; --bad: #e66767; --bad-soft: #3d2020; --grid: #26323d;
 }
 
