@@ -404,3 +404,10 @@ input.invalido { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft)
 .extras-check { display: inline-flex; }
 .extras-check.falta { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
 #extrasHint.falta { color: var(--bad); }
+
+/* Indicadores tocables */
+button.kpi { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.kpi:hover { border-color: var(--series-1); }
+button.kpi.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+.kpi .k-mas { margin-top: 6px; font-size: 12px; color: var(--series-1); font-weight: 600; }
+#kpiDetalle { scroll-margin-top: 72px; }

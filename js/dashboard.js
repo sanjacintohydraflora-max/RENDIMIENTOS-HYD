@@ -8,7 +8,7 @@ const Dashboard = (() => {
   const corto = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const numSort = (a, b) => parseFloat(String(a).replace(/[^\d.]/g, '')) - parseFloat(String(b).replace(/[^\d.]/g, '')) || String(a).localeCompare(String(b));
 
-  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '';
+  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '', kpiAbierto = '', rangoAntes = null;
 
   // ---------- Datos ----------
   function rango(tipo) {
@@ -142,12 +142,14 @@ const Dashboard = (() => {
     const escala = v => x0 + (v / ticks.at(-1)) * (xMax - x0);
     const H = top + filas.length * (alto + gap) + 4;
     const grid = ticks.map(t => `<line class="grid" x1="${escala(t)}" x2="${escala(t)}" y1="${top - 6}" y2="${H}"/><text x="${escala(t)}" y="12" text-anchor="middle">${fmt(t, t < 10 && t % 1 ? 1 : 0)}</text>`).join('');
+    const algunoActivo = filas.some(f => f.filtro && $(f.filtro[0]).value === f.filtro[1]);
     const barras = filas.map((f, i) => {
       const y = top + i * (alto + gap);
+      const filtro = f.filtro ? ` data-filtro="${f.filtro[0]}" data-valor="${esc(f.filtro[1])}" style="cursor:pointer${algunoActivo && $(f.filtro[0]).value !== f.filtro[1] ? ';opacity:.35' : ''}"` : '';
       const w = Math.max(2, escala(f.valor) - x0);
       const marca = f.marca != null ? `<line x1="${escala(f.marca)}" x2="${escala(f.marca)}" y1="${y - 3}" y2="${y + alto + 3}" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>` : '';
       const fin = Math.max(escala(f.valor), f.marca != null ? escala(f.marca) : 0);
-      return `<g data-tip="${esc(f.tip)}">
+      return `<g data-tip="${esc(f.tip)}"${filtro}>
         <rect x="0" y="${y - gap / 2}" width="${ancho}" height="${alto + gap}" fill="transparent"/>
         <text class="lbl" x="${etiqueta}" y="${y + alto / 2 + 4}" text-anchor="end">${esc(corto(f.label, maxCar))}</text>
         ${w > 8
@@ -186,15 +188,67 @@ const Dashboard = (() => {
     const dias = new Set(filas.map(f => f.FECHA)).size;
     const extras = filas.reduce((s, f) => s + Number(f['HORAS EXTRAS'] || 0), 0);
     const conExtras = new Set(filas.filter(f => Number(f['HORAS EXTRAS']) > 0).map(f => f.CEDULA)).size;
-    $('kpis').innerHTML = [
-      ['Horas laboradas', fmt(horas, 1), `${dias} días con registros`],
-      ['Personas', fmt(personas), `${filas.length} filas de rendimiento`],
-      extras ? ['Horas extras', fmt(extras, 2), `${conExtras} persona${conExtras > 1 ? 's' : ''} después de la salida`] : null,
-      ['Plantas trabajadas', fmt(plantas), 'labores medidas en plantas'],
-      ['Tallos', fmt(tallos), 'labores medidas en tallos'],
-      unidades ? ['Unidades', fmt(unidades), 'labores medidas en unidades'] : null,
-      ['Tiempo en labores medidas', horas ? `${fmt((hMedidas / horas) * 100)}%` : '—', 'plantas, tallos y unidades sobre el total'],
-    ].filter(Boolean).map(([l, v, s]) => `<div class="kpi"><div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-s">${s}</div></div>`).join('');
+    const lista = [
+      ['horas', 'Horas laboradas', fmt(horas, 1), `${dias} días con registros`],
+      ['personas', 'Personas', fmt(personas), `${fmt(personas ? horas / personas : 0, 1)} h promedio por persona`],
+      extras ? ['extras', 'Horas extras', fmt(extras, 2), `${conExtras} persona${conExtras > 1 ? 's' : ''} después de la salida`] : null,
+      plantas ? ['plantas', 'Plantas trabajadas', fmt(plantas), 'labores medidas en plantas'] : null,
+      tallos ? ['tallos', 'Tallos', fmt(tallos), 'labores medidas en tallos'] : null,
+      unidades ? ['unidades', 'Unidades', fmt(unidades), 'labores medidas en unidades'] : null,
+      ['medidas', 'Tiempo en labores medidas', horas ? `${fmt((hMedidas / horas) * 100)}%` : '—', 'plantas, tallos y unidades sobre el total'],
+    ].filter(Boolean);
+    if (!lista.some(k => k[0] === kpiAbierto)) kpiAbierto = '';
+    $('kpis').innerHTML = lista.map(([k, l, v, s]) => `<button type="button" class="kpi${k === kpiAbierto ? ' on' : ''}" data-kpi="${k}" aria-expanded="${k === kpiAbierto}">
+      <div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-s">${s}</div><div class="k-mas">${k === kpiAbierto ? 'Cerrar detalle ▴' : 'Ver detalle ▾'}</div></button>`).join('');
+    detalleKpi(filas);
+  }
+
+  // Detalle del indicador tocado. Las barras con persona, labor o área filtran todo el dashboard.
+  function detalleKpi(filas) {
+    const box = $('kpiDetalle');
+    box.classList.toggle('hidden', !kpiAbierto);
+    if (!kpiAbierto) { box.innerHTML = ''; return; }
+    const ancho = anchoDe('kpiDetalle');
+    const suma = (fl, clave, valor) => {
+      const g = new Map();
+      fl.forEach(f => { const k = clave(f); const x = g.get(k) || g.set(k, { v: 0, n: new Set(), f }).get(k); x.v += valor(f); x.n.add(f.FECHA); });
+      return [...g.entries()].sort((a, b) => b[1].v - a[1].v);
+    };
+    const horas = f => Number(f['TIEMPO LAB'] || 0);
+    const seccion = (t, html) => `<p class="chart-sub" style="margin:10px 0 4px"><b>${t}</b></p>${html}`;
+    const top = (lista, n = 15) => lista.slice(0, n);
+    const porPers = (fl, valor, unidadTxt, dec = 1) => barrasH(top(suma(fl, f => String(f.CEDULA), valor)).map(([c, x]) => ({
+      label: x.f.NOMBRE, valor: x.v, filtro: ['fPersona', c], texto: `${fmt(x.v, dec)} ${unidadTxt}`, tip: `${x.f.NOMBRE}\n${fmt(x.v, 2)} ${unidadTxt}\n${x.n.size} días`,
+    })), { ancho, etiqueta: 210, margen: 90 });
+    const porLabor = (fl, valor, unidadTxt, dec = 1) => barrasH(top(suma(fl, f => f.LABOR, valor)).map(([l, x]) => ({
+      label: l, valor: x.v, filtro: ['fLabor', l], texto: `${fmt(x.v, dec)} ${unidadTxt}`, tip: `${l}\n${fmt(x.v, 2)} ${unidadTxt}\n${x.n.size} días`,
+    })), { ancho, etiqueta: 210, margen: 90 });
+    let titulo = '', html = '';
+    if (kpiAbierto === 'horas') {
+      titulo = 'Horas laboradas';
+      const dias = [...suma(filas, f => f.FECHA, horas)].sort((a, b) => a[0].localeCompare(b[0]));
+      html = seccion('Por día', linea(dias.map(([d, x]) => ({ etiqueta: `${d.slice(8)}/${d.slice(5, 7)}`, valor: x.v, tip: `${d}\n${fmt(x.v, 2)} h` })), { ancho, alto: 200, unidadTxt: 'horas' }))
+        + seccion('Por área', barrasH(suma(filas, areaDe, horas).map(([a, x]) => ({ label: a, valor: x.v, filtro: ['fArea', a], texto: `${fmt(x.v, 1)} h`, tip: `${a}\n${fmt(x.v, 2)} h` })), { ancho, etiqueta: 210, margen: 90 }));
+    } else if (kpiAbierto === 'personas') {
+      titulo = 'Horas por persona';
+      html = porPers(filas, horas, 'h');
+    } else if (kpiAbierto === 'extras') {
+      titulo = 'Horas extras por persona';
+      const fl = filas.filter(f => Number(f['HORAS EXTRAS']) > 0);
+      html = porPers(fl, f => Number(f['HORAS EXTRAS'] || 0), 'h', 2) + seccion('Por labor', porLabor(fl, f => Number(f['HORAS EXTRAS'] || 0), 'h', 2));
+    } else if (['plantas', 'tallos', 'unidades'].includes(kpiAbierto)) {
+      const t = kpiAbierto;
+      titulo = `${t[0].toUpperCase()}${t.slice(1)} por labor y por persona`;
+      const fl = filas.filter(f => tipo(f) === t), cant = f => Number(f.CANTIDAD || 0);
+      html = seccion('Por labor', porLabor(fl, cant, t, 0)) + seccion('Por persona (las 15 con más)', porPers(fl, cant, t, 0));
+    } else if (kpiAbierto === 'medidas') {
+      titulo = 'Horas según cómo se mide la labor';
+      const total = filas.reduce((s, f) => s + horas(f), 0);
+      html = barrasH(suma(filas, f => ({ tiempo: 'Solo tiempo', plantas: 'Plantas', tallos: 'Tallos', unidades: 'Unidades' })[tipo(f)], horas)
+        .map(([m, x]) => ({ label: m, valor: x.v, texto: `${fmt(x.v, 1)} h · ${fmt(total ? (x.v / total) * 100 : 0)}%`, tip: `${m}\n${fmt(x.v, 2)} h` })), { ancho, etiqueta: 120, margen: 120 })
+        + seccion('Labores medidas', porLabor(filas.filter(f => tipo(f) !== 'tiempo'), horas, 'h'));
+    }
+    box.innerHTML = encabezado(titulo, 'Toca una barra para filtrar todo el dashboard por esa persona, labor o área.', '<button type="button" class="btn small" data-kpi-cerrar>Cerrar</button>') + html;
   }
 
   function promMax(filas) {
@@ -205,7 +259,7 @@ const Dashboard = (() => {
       g.suma += r; g.n++; g.max = Math.max(g.max, r); g.cant += Number(f.CANTIDAD || 0); g.horas += Number(f['TIEMPO LAB'] || 0);
     });
     const porUnidad = t => Object.values(grupos).filter(g => g.t === t).sort((a, b) => b.suma / b.n - a.suma / a.n).map(g => ({
-      label: g.labor, valor: g.suma / g.n, marca: g.max,
+      label: g.labor, valor: g.suma / g.n, marca: g.max, filtro: ['fLabor', g.labor],
       texto: `${fmt(g.suma / g.n)} · máx ${fmt(g.max)}`,
       tip: `${g.labor}\nPromedio ${fmt(g.suma / g.n, 1)} ${unidad(g.t)}\nMáximo ${fmt(g.max, 1)} ${unidad(g.t)}\n${g.n} registros · ${fmt(g.cant)} ${g.t} en ${fmt(g.horas, 1)} h`,
     }));
@@ -228,7 +282,7 @@ const Dashboard = (() => {
       lista = [...lista.slice(0, 11), [`Otras (${lista.length - 11})`, resto]];
     }
     $('cHorasLabor').innerHTML = encabezado('Horas por labor', 'Tiempo laborado en el período y su porcentaje del total.') +
-      barrasH(lista.map(([l, h]) => ({ label: l, valor: h, texto: `${fmt(h, 1)} h · ${fmt((h / total) * 100)}%`, tip: `${l}\n${fmt(h, 2)} horas\n${fmt((h / total) * 100, 1)}% del tiempo` })), { ancho: anchoDe('cHorasLabor'), etiqueta: 200 });
+      barrasH(lista.map(([l, h]) => ({ label: l, valor: h, filtro: l.startsWith('Otras (') ? null : ['fLabor', l], texto: `${fmt(h, 1)} h · ${fmt((h / total) * 100)}%`, tip: `${l}\n${fmt(h, 2)} horas\n${fmt((h / total) * 100, 1)}% del tiempo` })), { ancho: anchoDe('cHorasLabor'), etiqueta: 200 });
   }
 
   function laboresMedidas(filas) {
@@ -243,7 +297,7 @@ const Dashboard = (() => {
     const fl = filas.filter(f => f.LABOR === laborPersona && Number(f['TIEMPO LAB']) > 0);
     const g = {};
     fl.forEach(f => {
-      const p = g[f.CEDULA] ||= { nombre: f.NOMBRE, cant: 0, horas: 0, suma: 0, n: 0 };
+      const p = g[f.CEDULA] ||= { ced: String(f.CEDULA), nombre: f.NOMBRE, cant: 0, horas: 0, suma: 0, n: 0 };
       p.cant += Number(f.CANTIDAD || 0); p.horas += Number(f['TIEMPO LAB'] || 0); p.suma += Number(f.RENDIMIENTO || 0); p.n++;
     });
     const t = fl[0] ? tipo(fl[0]) : 'plantas';
@@ -252,7 +306,7 @@ const Dashboard = (() => {
     $('cPersona').innerHTML = encabezado('Rendimiento por persona', labores.length ? `${esc(unidad(t))} en el período (cantidad total ÷ horas). Promedio del grupo: ${fmt(prom, 1)}.` : 'Sin labores medidas.',
       labores.length ? selectorLabor('selPersona', labores, laborPersona) : '') +
       barrasH(lista.map(p => ({
-        label: p.nombre, valor: p.rend, texto: fmt(p.rend, 1),
+        label: p.nombre, valor: p.rend, texto: fmt(p.rend, 1), filtro: ['fPersona', p.ced],
         color: p.rend < prom * 0.8 ? 'var(--warn)' : 'var(--series-1)',
         tip: `${p.nombre}\n${fmt(p.rend, 1)} ${unidad(t)}\n${fmt(p.cant)} ${t} en ${fmt(p.horas, 1)} h · ${p.n} registros${p.rend < prom * 0.8 ? '\nMás de 20% por debajo del promedio' : ''}`,
       })), { ancho: anchoDe('cPersona'), etiqueta: 210, margen: 50 }) +
@@ -289,6 +343,12 @@ const Dashboard = (() => {
     const fl = filas.filter(f => !distPersona || String(f.CEDULA) === distPersona);
     const clave = f => distPeriodo === 'mes' ? f.FECHA.slice(0, 7)
       : distPeriodo === 'semana' ? `${f.FECHA.slice(0, 4)}-S${String(f.SEM || Calc.semanaISO(f.FECHA)).padStart(2, '0')}` : f.FECHA;
+    // Rango de fechas de cada barra, para filtrar el resto del dashboard al tocarla.
+    const rangoClave = k => {
+      if (distPeriodo === 'mes') return [`${k}-01`, isoStr(new Date(Date.UTC(+k.slice(0, 4), +k.slice(5), 0)))];
+      if (distPeriodo === 'semana') { const ini = masDias(lunesSemana1(+k.slice(0, 4)), 7 * (+k.slice(6) - 1)); return [ini, masDias(ini, 6)]; }
+      return [k, k];
+    };
     const etiqueta = k => distPeriodo === 'mes' ? `${MESES[+k.slice(5) - 1].slice(0, 3)} ${k.slice(2, 4)}`
       : distPeriodo === 'semana' ? `Sem ${+k.slice(6)}` : `${k.slice(8)}/${k.slice(5, 7)}`;
     // Las 7 labores con más horas tienen color propio; el resto va a "Otras".
@@ -326,18 +386,22 @@ const Dashboard = (() => {
           base += v;
           const h = Math.max(1, y0 - y1 - (j ? 2 : 0));
           const yTop = y0 - (j ? 2 : 0) - h;
+          const fil = s === 'Otras' ? '' : ` data-filtro="fLabor" data-valor="${esc(s)}" style="cursor:pointer${$('fLabor').value && $('fLabor').value !== s ? ';opacity:.35' : ''}"`;
           return j === segs.length - 1 && h > 6
-            ? `<path d="M${x} ${yTop + h} v${-(h - 4)} a4 4 0 0 1 4 -4 h${bw - 8} a4 4 0 0 1 4 4 v${h - 4} z" fill="${color(s)}"/>`
-            : `<rect x="${x}" y="${yTop}" width="${bw}" height="${h}" fill="${color(s)}"/>`;
+            ? `<path${fil} d="M${x} ${yTop + h} v${-(h - 4)} a4 4 0 0 1 4 -4 h${bw - 8} a4 4 0 0 1 4 4 v${h - 4} z" fill="${color(s)}"/>`
+            : `<rect${fil} x="${x}" y="${yTop}" width="${bw}" height="${h}" fill="${color(s)}"/>`;
         }).join('');
+        const [pd, ph] = rangoClave(k);
         const tip = [`${etiqueta(k)} · ${fmt(totales[i], 2)} h${nPers > 1 ? ` (${nPers} personas)` : ''}`, ...segs.map(s => `${s}: ${fmt(g[k][s], 2)} h · ${fmt((g[k][s] / totales[i]) * 100)}%`)].join('\n');
         const lbl = i % salto === 0 || i === claves.length - 1 ? `<text x="${x + bw / 2}" y="${alto - 10}" text-anchor="middle">${esc(etiqueta(k))}</text>` : '';
-        return `<g data-tip="${esc(tip)}"><rect x="${l + i * paso}" y="${t}" width="${paso}" height="${alto - t - b}" fill="transparent"/>${rects}</g>${lbl}`;
+        // La franja de la fecha (debajo de la barra) filtra ese período.
+        const zona = `<rect data-desde="${pd}" data-hasta="${ph}" style="cursor:pointer" x="${l + i * paso}" y="${alto - b}" width="${paso}" height="${b}" fill="transparent"/>`;
+        return `<g data-tip="${esc(tip)}"><rect data-desde="${pd}" data-hasta="${ph}" style="cursor:pointer" x="${l + i * paso}" y="${t}" width="${paso}" height="${alto - t - b}" fill="transparent"/>${rects}</g>${lbl}${zona}`;
       }).join('');
-      const leyenda = `<div class="legend" style="margin-top:10px">${series.map(s => `<span><i style="background:${color(s)}"></i>${esc(corto(s, 34))} · ${fmt(s === 'Otras' ? orden.slice(top.length).reduce((a, x) => a + totLab[x], 0) : totLab[s], 1)} h</span>`).join('')}</div>`;
+      const leyenda = `<div class="legend" style="margin-top:10px">${series.map(s => `<span${s === 'Otras' ? '' : ` data-filtro="fLabor" data-valor="${esc(s)}" style="cursor:pointer${$('fLabor').value && $('fLabor').value !== s ? ';opacity:.4' : ''}"`}><i style="background:${color(s)}"></i>${esc(corto(s, 34))} · ${fmt(s === 'Otras' ? orden.slice(top.length).reduce((a, x) => a + totLab[x], 0) : totLab[s], 1)} h</span>`).join('')}</div>`;
       cuerpo = leyenda + `<svg class="chart" viewBox="0 0 ${ancho} ${alto}" role="img" aria-label="Horas por labor">${grid}<line class="axis" x1="${l}" x2="${ancho - r}" y1="${Y(0)}" y2="${Y(0)}"/>${barras}</svg>`;
     }
-    $('cDistrib').innerHTML = encabezado(`Distribución del tiempo · ${quien}`, `Horas laboradas por ${distPeriodo === 'dia' ? 'día' : distPeriodo}, separadas por labor. Toca una barra para ver el detalle.`, controles) + cuerpo;
+    $('cDistrib').innerHTML = encabezado(`Distribución del tiempo · ${quien}`, `Horas laboradas por ${distPeriodo === 'dia' ? 'día' : distPeriodo}, separadas por labor. Toca un color para filtrar por esa labor, o la fecha debajo de una barra para ver solo ese período.`, controles) + cuerpo;
     $('distSeg').addEventListener('click', e => { const bt = e.target.closest('[data-p]'); if (bt) { distPeriodo = bt.dataset.p; render(); } });
     $('distPersona').addEventListener('change', e => { distPersona = e.target.value; if ($('fPersona').value && distPersona !== $('fPersona').value) $('fPersona').value = ''; render(); });
   }
@@ -346,7 +410,7 @@ const Dashboard = (() => {
     const dias = [...new Set(filas.map(f => f.FECHA))].sort();
     const g = {};
     filas.forEach(f => {
-      const p = g[f.CEDULA] ||= { nombre: f.NOMBRE, d: {}, a: {} };
+      const p = g[f.CEDULA] ||= { ced: String(f.CEDULA), nombre: f.NOMBRE, d: {}, a: {} };
       p.a[f.FECHA] ||= areaDe(f);
       p.d[f.FECHA] = (p.d[f.FECHA] || 0) + Number(f['TIEMPO LAB'] || 0);
     });
@@ -368,10 +432,15 @@ const Dashboard = (() => {
     $('cRevision').innerHTML = encabezado('Revisión de horas por día', `Horas laboradas por persona y día. La jornada esperada es la del horario de cada área para ese día.`) +
       `<div class="legend"><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>↓ Menos de la jornada</span><span><i style="background:var(--bad-soft);border:1px solid var(--bad)"></i>↑ Más de una hora extra</span></div>
       <div class="table-scroll"><table class="hours-table heat"><thead><tr><th>Persona</th>${dias.map(d => `<th class="n" style="text-align:center">${dsem[new Date(`${d}T12:00`).getDay()]} ${d.slice(8)}</th>`).join('')}<th class="n">Total</th></tr></thead>
-      <tbody>${personas.map(p => `<tr><td style="white-space:nowrap">${esc(corto(p.nombre, 28))}</td>${dias.map(d => celda(p.d[d], p.a[d], d)).join('')}<td class="n"><b>${fmt(Object.values(p.d).reduce((a, b) => a + b, 0), 1)}</b></td></tr>`).join('')}</tbody></table></div>`;
+      <tbody>${personas.map(p => `<tr><td style="white-space:nowrap;cursor:pointer;text-decoration:underline dotted" data-filtro="fPersona" data-valor="${esc(p.ced)}">${esc(corto(p.nombre, 28))}</td>${dias.map(d => celda(p.d[d], p.a[d], d)).join('')}<td class="n"><b>${fmt(Object.values(p.d).reduce((a, b) => a + b, 0), 1)}</b></td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function bloques(filas) {
+    // Solo tiene sentido cuando se mira información de un cultivo con plano.
+    const fa = $('fArea').value;
+    const verCultivo = fa ? Calc.tienePlano(fa) : filas.some(f => Calc.tienePlano(areaDe(f)));
+    $('cBloques').classList.toggle('hidden', !verCultivo);
+    if (!verCultivo) { $('cBloques').innerHTML = ''; return; }
     // Cada cultivo tiene su plano: se usa el del área filtrada o, si no hay filtro, el del área de este celular.
     const area = Calc.tienePlano($('fArea').value) ? $('fArea').value : Calc.tienePlano(ctx.area()) ? ctx.area() : Calc.AREA_BASE;
     const sede = Calc.areaInfo(area).sede;
@@ -384,7 +453,7 @@ const Dashboard = (() => {
     const hecho = {};
     fl.filter(f => f.LABOR === laborBloque).forEach(f => { hecho[f.BLOQUE] = (hecho[f.BLOQUE] || 0) + Number(f.CANTIDAD || 0); });
     const lista = Object.keys(inv).sort(numSort).map(b => ({
-      label: b, valor: inv[b] ? Math.min(100, ((hecho[b] || 0) / inv[b]) * 100) : 0,
+      label: b, filtro: ['fBloque', b], valor: inv[b] ? Math.min(100, ((hecho[b] || 0) / inv[b]) * 100) : 0,
       texto: `${fmt(((hecho[b] || 0) / inv[b]) * 100, ((hecho[b] || 0) / inv[b]) * 100 < 10 ? 1 : 0)}% · ${fmt(hecho[b] || 0)} de ${fmt(inv[b])}`,
       tip: `${b}\n${fmt(hecho[b] || 0)} plantas trabajadas\n${fmt(inv[b])} plantas en el plano`,
     }));
@@ -455,11 +524,12 @@ const Dashboard = (() => {
       const b = ev.target.closest('button[data-r]');
       if (!b) return;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.toggle('on', x === b));
-      [$('fDesde').value, $('fHasta').value] = rango(b.dataset.r);
+      [$('fDesde').value, $('fHasta').value] = rango(b.dataset.r); rangoAntes = null;
       limpiarPeriodo();
       await traerServidor(); render();
     });
     ['fDesde', 'fHasta'].forEach(id => $(id).addEventListener('change', async () => {
+      rangoAntes = null;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
       limpiarPeriodo();
       await traerServidor(); render();
@@ -475,6 +545,36 @@ const Dashboard = (() => {
     }));
     ['fArea', 'fLider', 'fLabor', 'fPersona', 'fBloque', 'fLugar'].forEach(id => $(id).addEventListener('change', render));
     $('fabFiltros').addEventListener('click', () => abrirFiltros(true));
+    // Tocar un indicador abre su detalle; tocar una barra filtra todas las gráficas (otra vez = quitar).
+    $('view-dashboard').addEventListener('click', ev => {
+      if (ev.target.closest('#dashFiltros')) return;
+      if (ev.target.closest('[data-kpi-cerrar]')) { kpiAbierto = ''; render(); return; }
+      const k = ev.target.closest('[data-kpi]');
+      if (k) {
+        kpiAbierto = kpiAbierto === k.dataset.kpi ? '' : k.dataset.kpi;
+        render().then(() => { if (kpiAbierto && innerWidth < 900) $('kpiDetalle').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        return;
+      }
+      const f = ev.target.closest('[data-filtro]');
+      if (f) {
+        const sel = $(f.dataset.filtro), quitar = sel.value === f.dataset.valor;
+        sel.value = quitar ? '' : f.dataset.valor;
+        if (f.dataset.filtro === 'fPersona') distPersona = sel.value;
+        const nombre = sel.selectedOptions[0]?.textContent || f.dataset.valor;
+        render();
+        ctx.toast(quitar ? 'Filtro quitado' : `Filtrado por ${nombre}. Tócalo de nuevo para quitarlo.`, 3000);
+        return;
+      }
+      const r = ev.target.closest('[data-desde]');
+      if (r) {
+        const igual = $('fDesde').value === r.dataset.desde && $('fHasta').value === r.dataset.hasta;
+        if (igual && rangoAntes) { [$('fDesde').value, $('fHasta').value] = rangoAntes; rangoAntes = null; }
+        else if (!igual) { rangoAntes ||= [$('fDesde').value, $('fHasta').value]; $('fDesde').value = r.dataset.desde; $('fHasta').value = r.dataset.hasta; }
+        document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
+        render();
+        ctx.toast(rangoAntes ? `Mostrando ${r.dataset.desde === r.dataset.hasta ? r.dataset.desde : `${r.dataset.desde} a ${r.dataset.hasta}`}. Toca de nuevo para volver.` : 'Rango anterior restaurado', 3000);
+      }
+    });
     $('filtrosListo').addEventListener('click', () => abrirFiltros(false));
     $('filtrosFondo').addEventListener('click', () => abrirFiltros(false));
     $('filtrosLimpiar').addEventListener('click', () => { FILTROS.forEach(([id]) => { $(id).value = ''; }); render(); });
