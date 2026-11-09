@@ -9,7 +9,7 @@ const Calc = (() => {
     'AÑO', 'MES', 'SEM', 'FECHA', 'AREA', 'LUGAR DE TRABAJO', 'ESTADO', 'NOMBRE', 'CEDULA', 'LABOR',
     'HRA INICIO', 'HRA FIN', 'HORAS TOTALES', 'DESAYUNO', 'PAUSAS', 'ALMUERZO', 'TIEMPO LAB',
     'CANTIDAD', 'RENDIMIENTO', 'OBSERVACIONES', 'MEDIDA', 'BLOQUE', 'LOTE', 'CAMAS', 'N CAMAS',
-    'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO', 'HORAS EXTRAS',
+    'GRUPAL', 'N PERSONAS', 'CANTIDAD GRUPO', 'LIDER', 'ID REGISTRO', 'ID FILA', 'ACTUALIZADO', 'HORAS EXTRAS', 'EXTRAS CONFIRMADAS',
   ];
 
   // Áreas de la empresa. Los dos cultivos comparten labores pero cada uno tiene su plano de producción.
@@ -239,7 +239,7 @@ const Calc = (() => {
         'LOTE': t.lote || '', 'CAMAS': formatCamas(t.camas || []), 'N CAMAS': (t.camas || []).length,
         'GRUPAL': n > 1 ? 'SI' : 'NO', 'N PERSONAS': n, 'CANTIDAD GRUPO': total, 'LIDER': reg.lider || '',
         'ID REGISTRO': reg.id, 'ID FILA': partes.length > 1 ? `${reg.id}-${ced}-${i + 1}` : `${reg.id}-${ced}`, 'ACTUALIZADO': reg.actualizado || '',
-        'HORAS EXTRAS': r2(extras * w),
+        'HORAS EXTRAS': r2(extras * w), 'EXTRAS CONFIRMADAS': reg.extrasOk?.[ced] ? 'SI' : '',
       };
     }));
     return { horasTotales, desayuno, almuerzo, pausa, tiempoLab, extras, n, tipo, total, porPersona, rendimiento, filas };
@@ -319,6 +319,42 @@ const Calc = (() => {
     return msgs;
   }
 
+  // Días anteriores a `fecha` en que alguien trabajó más que la jornada (horas extras) y el líder
+  // aún no lo confirmó. Se agrupa por día y persona.
+  function extrasPorConfirmar(todos, fecha, cfg) {
+    const g = new Map();
+    todos.filter(r => r.fecha && r.fecha < fecha && r.estado !== 'abierto' && !esPorDias(r.labor)).forEach(r => {
+      const c = calcular(r, cfg, null);
+      r.empleados.forEach(ced => {
+        const k = `${r.fecha}|${ced}`;
+        const p = g.get(k) || g.set(k, { fecha: r.fecha, ced, nombre: r.nombres?.[ced] || ced, horas: 0, extras: 0, regs: [] }).get(k);
+        p.horas += c.tiempoLab; p.extras += c.extras; p.regs.push(r);
+      });
+    });
+    return [...g.values()].map(p => {
+      const meta = jornadaDia(cfg, p.fecha);
+      const extra = Math.max(p.extras, meta > 0 ? p.horas - meta : 0);
+      return { ...p, horas: r2(p.horas), meta, extra: r2(extra) };
+    }).filter(p => p.extra > 0.02 && !p.regs.every(r => r.extrasOk?.[p.ced]))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
+  }
+
+  // Filas del servidor de la misma persona y el mismo día que registros de este celular, hechas en otro
+  // celular u otro líder (otro ID de registro).
+  function crucesServidor(locales, filasServidor) {
+    const ids = new Set(locales.map(r => r.id));
+    const mias = new Map();
+    locales.forEach(r => r.empleados.forEach(c => { const k = `${r.fecha}|${c}`; (mias.get(k) || mias.set(k, []).get(k)).push(r); }));
+    return filasServidor.filter(f => !ids.has(String(f['ID REGISTRO'])) && mias.has(`${String(f.FECHA).slice(0, 10)}|${String(f.CEDULA)}`))
+      .map(f => {
+        const fecha = String(f.FECHA).slice(0, 10), mis = mias.get(`${fecha}|${String(f.CEDULA)}`);
+        const a = minutos(String(f['HRA INICIO'])), b = minutos(String(f['HRA FIN']));
+        const cruza = a != null && b != null && mis.some(r => { const x = minutos(r.horaInicio), y = minutos(r.horaFin) ?? 24 * 60; return x != null && a < y && x < b; });
+        return { id: String(f['ID FILA']), fecha, ced: String(f.CEDULA), nombre: f.NOMBRE, lider: f.LIDER || 'sin nombre', area: f.AREA || '',
+          labor: f.LABOR, inicio: String(f['HRA INICIO']), fin: String(f['HRA FIN']), cruza };
+      });
+  }
+
   // Personas que no completaron la jornada de un día o que dejaron labores sin terminar.
   function incompletosDelDia(delDia, fecha, cfg) {
     const meta = jornadaDia(cfg, fecha);
@@ -372,6 +408,6 @@ const Calc = (() => {
     });
   }
 
-  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, minutosExtra, horasExtra, esFestivo, motivoExtra, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
+  return { evaluar, COLUMNAS, AREAS, AREA_BASE, AREA_ANTES, HORARIOS, cfgDe, horarioDia, jornadaDia, areaInfo, esCultivo, tienePlano, laborEnArea, sedeCama, CONFIG_BASE, tramosDe, cruces, diaIncompleto, diasQueBloquean, incompletosDelDia, minutosExtra, horasExtra, extrasPorConfirmar, crucesServidor, esFestivo, motivoExtra, esPorDias, diasDelRango, norm, minutos, tipoMedida, esGrupalPorMedida, descuentosAuto, parseCamas, formatCamas, semanaISO, calcular, validar, buscar, r2 };
 })();
 if (typeof module !== 'undefined') module.exports = Calc;

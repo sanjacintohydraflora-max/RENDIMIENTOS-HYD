@@ -108,6 +108,18 @@ const Sync = (() => {
     return data.filas || [];
   }
 
+  // Busca en la hoja registros de otro celular o líder con las mismas personas y días que este celular
+  // (últimos 10 días). Los nuevos quedan en 'cruces' hasta que el líder los marque como revisados.
+  async function revisarCruces() {
+    const desde = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
+    const locales = (await DB.allRegistros()).filter(r => r.fecha >= desde);
+    if (!locales.length) return;
+    const fechas = locales.map(r => r.fecha).sort();
+    const vistos = new Set(await DB.getMeta('crucesVistos', []));
+    const nuevos = Calc.crucesServidor(locales, await filas(fechas[0], fechas[fechas.length - 1])).filter(c => !vistos.has(c.id));
+    await DB.setMeta('cruces', nuevos);
+  }
+
   async function sincronizar({ catalogos = true } = {}) {
     if (enCurso) return;
     const { url } = await conf();
@@ -119,6 +131,7 @@ const Sync = (() => {
     try {
       enviados = await subir();
       if (catalogos) await bajarCatalogos();
+      await revisarCruces();
       await DB.setMeta('ultimaSync', new Date().toISOString());
     } catch (e) {
       error = e.message || String(e);

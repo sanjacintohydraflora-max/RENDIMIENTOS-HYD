@@ -594,9 +594,12 @@
     const bloq = S.editId ? [] : Calc.diasQueBloquean(regs, $('fecha').value || hoyStr(), cfgA());
     $('diaCard').classList.toggle('hidden', !bloq.length);
     S.diaPendiente = bloq.length ? bloq[0].fecha : null;
+    const extras = S.editId ? [] : pintarExtrasPend(regs);
+    const cruces = S.editId ? [] : await pintarCruces();
+    const bloquea = !!(bloq.length || extras.length || cruces.length);
     // Bloquea la escritura: solo se puede cambiar la fecha o completar desde el aviso.
-    $('form').classList.toggle('bloqueado', !!bloq.length);
-    $('form').querySelectorAll('input, select, textarea, button').forEach(el => { if (el.id !== 'fecha') el.disabled = !!bloq.length; });
+    $('form').classList.toggle('bloqueado', bloquea);
+    $('form').querySelectorAll('input, select, textarea, button').forEach(el => { if (el.id !== 'fecha') el.disabled = bloquea; });
     if (!bloq.length) return;
     const n = bloq.reduce((s, d) => s + d.personas.length, 0);
     $('diaTitulo').textContent = bloq.length > 1 ? `${bloq.length} días incompletos · ${n} pendientes` : `Día ${fechaCorta(bloq[0].fecha)} incompleto · ${n} persona${n > 1 ? 's' : ''}`;
@@ -605,6 +608,60 @@
         <small>${p.abiertos.length ? `<span class="flag-low">${p.abiertos.length} sin terminar</span> · ` : ''}${fmt(p.horas, 2)} h de ${fmt(p.meta, 2)}${p.horas < p.meta ? ` · faltan ${fmt(p.meta - p.horas, 2)} h` : ''}</small></span>
         ${i === 0 ? `<button type="button" class="btn small primary" data-dia-ced="${esc(p.ced)}" data-dia-fecha="${d.fecha}">Completar</button>` : ''}
       </div>`).join('')}`).join('');
+  }
+
+  // Horas extras de días anteriores que el líder debe confirmar antes de seguir.
+  function pintarExtrasPend(regs) {
+    const lista = Calc.extrasPorConfirmar(regs, $('fecha').value || hoyStr(), cfgA());
+    S.extrasPend = lista;
+    $('extrasCard').classList.toggle('hidden', !lista.length);
+    if (!lista.length) return lista;
+    $('extrasTitulo').textContent = `Horas extras por confirmar (${lista.length})`;
+    $('extrasTodas').classList.toggle('hidden', lista.length < 2);
+    $('extrasLista').innerHTML = lista.map((p, i) => `<div class="cad-item">
+        <span class="cad-h">${fechaCorta(p.fecha).slice(0, 5)}</span>
+        <span class="cad-l"><b>${esc(S.empMap[p.ced]?.nombre || p.nombre)}</b>
+        <small>${fmt(p.horas, 2)} h laboradas${p.meta ? ` de ${fmt(p.meta, 2)}` : ` (${Calc.motivoExtra(p.fecha) || 'sin jornada'})`} · <span class="flag-low">${fmt(p.extra, 2)} h extras</span></small></span>
+        <button type="button" class="btn small primary" data-extras="${i}">Confirmar</button>
+      </div>`).join('');
+    return lista;
+  }
+
+  async function confirmarExtras(lista) {
+    const ahora = new Date().toISOString();
+    const porId = new Map();
+    lista.forEach(p => p.regs.forEach(r => {
+      const x = porId.get(r.id) || porId.set(r.id, { ...r, extrasOk: { ...(r.extrasOk || {}) } }).get(r.id);
+      x.extrasOk[p.ced] = ahora;
+    }));
+    const cambios = [...porId.values()].map(r => ({ ...r, actualizado: ahora, sincronizado: false }));
+    await DB.putRegistros(cambios);
+    toast(lista.length > 1 ? `Se confirmaron las horas extras de ${lista.length} personas` : 'Horas extras confirmadas');
+    pintarAbiertos(); actualizarSyncPill();
+    Sync.sincronizar({ catalogos: false });
+  }
+
+  // Registros de otro líder con las mismas personas y días, encontrados al sincronizar.
+  async function pintarCruces() {
+    const lista = await DB.getMeta('cruces', []);
+    $('crucesCard').classList.toggle('hidden', !lista.length);
+    if (!lista.length) return lista;
+    const lideres = [...new Set(lista.map(c => c.lider))];
+    $('crucesTitulo').textContent = `${lideres.length > 1 ? 'Otros líderes registraron' : `${lideres[0]} registró`} a las mismas personas`;
+    $('crucesLista').innerHTML = lista.map(c => `<div class="cad-item">
+        <span class="cad-h">${fechaCorta(c.fecha).slice(0, 5)} ${esc(c.inicio)}</span>
+        <span class="cad-l"><b>${esc(S.empMap[c.ced]?.nombre || c.nombre)}</b>
+        <small>${esc(c.labor)} ${esc(c.inicio)}–${esc(c.fin)} · registró <b>${esc(c.lider)}</b>${c.area ? ` (${esc(c.area)})` : ''}${c.cruza ? ' · <span class="flag-high">horario cruzado con el tuyo</span>' : ''}</small></span>
+      </div>`).join('');
+    return lista;
+  }
+
+  async function crucesRevisados() {
+    const lista = await DB.getMeta('cruces', []);
+    const vistos = await DB.getMeta('crucesVistos', []);
+    await DB.setMeta('crucesVistos', [...new Set([...vistos, ...lista.map(c => c.id)])].slice(-2000));
+    await DB.setMeta('cruces', []);
+    pintarAbiertos();
   }
 
   // Lleva el formulario al día pendiente con esa persona elegida.
@@ -991,6 +1048,7 @@
     document.querySelectorAll('main[id^="view-"]').forEach(m => m.classList.toggle('hidden', m.id !== `view-${vista}`));
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === vista));
     if (vista === 'hoy') pintarHoy();
+    if (vista === 'registrar') pintarAbiertos();
     if (vista === 'ajustes') pintarAjustes();
     if (vista === 'dashboard') Dashboard.abrir({ filasLocales, empMap: () => S.empMap, camas: () => S.camasTodas, area: () => S.area, jornada: (area, fecha) => Calc.jornadaDia(Calc.cfgDe(S.cfg, area), fecha), descargarExcel, toast });
     if (vista !== 'inicio') try { localStorage.setItem('vista', vista); } catch { /* sin almacenamiento */ }
@@ -1075,6 +1133,11 @@
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
+    $('extrasLista').addEventListener('click', ev => {
+      const b = ev.target.closest('[data-extras]'); if (b) confirmarExtras([S.extrasPend[+b.dataset.extras]]);
+    });
+    $('extrasTodas').addEventListener('click', () => confirmarExtras(S.extrasPend));
+    $('crucesOk').addEventListener('click', crucesRevisados);
     $('diaLista').addEventListener('click', ev => {
       const b = ev.target.closest('[data-dia-ced]'); if (b) completarDia(b.dataset.diaCed, b.dataset.diaFecha);
     });
@@ -1172,7 +1235,7 @@
     });
     $('exportLocal').addEventListener('click', async () => descargarExcel(await filasLocales(), `rendimientos-celular-${hoyStr()}.xlsx`));
 
-    Sync.onCambio(st => { actualizarSyncPill(st); if (st.tipo !== 'sincronizando') cargarCatalogos(); });
+    Sync.onCambio(st => { actualizarSyncPill(st); if (st.tipo !== 'sincronizando') { cargarCatalogos(); pintarAbiertos(); } });
   }
 
   async function iniciar() {

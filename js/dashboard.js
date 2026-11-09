@@ -31,9 +31,10 @@ const Dashboard = (() => {
   const diaCorto = s => `${+s.slice(8)} ${MESES[+s.slice(5, 7) - 1].slice(0, 3).toLowerCase()}`;
 
   function pintarSemanas() {
-    const y = +$('fAnio').value, m = $('fMes').value, cur = $('fSemana').value;
+    // Sin año elegido se listan las semanas del año actual, para poder elegir la semana directamente.
+    const y = +$('fAnio').value || new Date().getFullYear(), m = $('fMes').value, cur = $('fSemana').value;
     let ops = [];
-    if (y) {
+    {
       const l1 = lunesSemana1(y);
       for (let w = 1; w <= semanasDelAnio(y); w++) {
         const ini = masDias(l1, 7 * (w - 1)), fin = masDias(ini, 6);
@@ -63,7 +64,7 @@ const Dashboard = (() => {
     return [`${y}-01-01`, `${y}-12-31`];
   }
 
-  const limpiarPeriodo = () => { $('fAnio').value = ''; $('fMes').value = ''; pintarSemanas(); };
+  const limpiarPeriodo = () => { $('fAnio').value = ''; $('fMes').value = ''; $('fSemana').value = ''; pintarSemanas(); };
 
   async function filasCombinadas() {
     const locales = await ctx.filasLocales();
