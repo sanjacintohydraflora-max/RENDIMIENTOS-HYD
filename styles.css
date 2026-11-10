@@ -411,3 +411,9 @@ button.kpi:hover { border-color: var(--series-1); }
 button.kpi.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
 .kpi .k-mas { margin-top: 6px; font-size: 12px; color: var(--series-1); font-weight: 600; }
 #kpiDetalle { scroll-margin-top: 72px; }
+
+/* Botones de área en la gráfica de distribución */
+.area-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.area-chip { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.area-chip.on { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.area-chip:disabled { cursor: default; background: var(--brand-soft); color: var(--brand); font-weight: 600; }

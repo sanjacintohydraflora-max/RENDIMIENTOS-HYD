@@ -8,7 +8,7 @@ const Dashboard = (() => {
   const corto = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const numSort = (a, b) => parseFloat(String(a).replace(/[^\d.]/g, '')) - parseFloat(String(b).replace(/[^\d.]/g, '')) || String(a).localeCompare(String(b));
 
-  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '', kpiAbierto = '', rangoAntes = null;
+  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '', kpiAbierto = '', rangoAntes = null, areasRango = [];
 
   // ---------- Datos ----------
   function rango(tipo) {
@@ -363,7 +363,13 @@ const Dashboard = (() => {
     fl.forEach(f => { const k = clave(f); const b = g[k] ||= {}; const s = serie(f.LABOR); b[s] = (b[s] || 0) + Number(f['TIEMPO LAB'] || 0); });
     const claves = Object.keys(g).sort();
     const nPers = distPersona ? 1 : new Set(fl.map(f => f.CEDULA)).size;
-    const quien = distPersona ? (pers.find(([c]) => c === distPersona)?.[1] || '') : `todo el equipo (${nPers} personas)`;
+    const quien = distPersona ? (pers.find(([c]) => c === distPersona)?.[1] || '') : `${$('fArea').value ? `${$('fArea').value.toLowerCase().replace(/(^| )(\S)/g, (m, e, c) => e + c.toUpperCase())}, ` : ''}todo el equipo (${nPers} persona${nPers === 1 ? '' : 's'})`;
+    const area = $('fArea').value;
+    const chips = areasRango.length > 1 || area ? `<div class="area-chips">${[['', 'Todas las áreas'], ...areasRango.map(a => [a, a])].map(([v, t]) => {
+      const on = v === area;
+      // "Todas" quita el filtro de área; cada área lo pone o lo quita.
+      return `<button type="button" class="area-chip${on ? ' on' : ''}" data-filtro="fArea" data-valor="${esc(v || area)}"${!v && !area ? ' disabled' : ''}>${esc(v ? t.toLowerCase().replace(/(^| )(\S)/g, (m, e, c) => e + c.toUpperCase()) : t)}</button>`;
+    }).join('')}</div>` : '';
     const controles = `<div class="btn-row" style="gap:8px;align-items:center">
       <div class="seg" id="distSeg">${[['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']].map(([v, t]) => `<button type="button" data-p="${v}" class="${v === distPeriodo ? 'on' : ''}">${t}</button>`).join('')}</div>
       <select id="distPersona" style="min-height:38px;font-size:14px;padding:6px 8px;width:auto;max-width:240px"><option value="">Todo el equipo</option>${pers.map(([c, n]) => `<option value="${esc(c)}" ${c === distPersona ? 'selected' : ''}>${esc(corto(n, 30))}</option>`).join('')}</select></div>`;
@@ -401,7 +407,7 @@ const Dashboard = (() => {
       const leyenda = `<div class="legend" style="margin-top:10px">${series.map(s => `<span${s === 'Otras' ? '' : ` data-filtro="fLabor" data-valor="${esc(s)}" style="cursor:pointer${$('fLabor').value && $('fLabor').value !== s ? ';opacity:.4' : ''}"`}><i style="background:${color(s)}"></i>${esc(corto(s, 34))} · ${fmt(s === 'Otras' ? orden.slice(top.length).reduce((a, x) => a + totLab[x], 0) : totLab[s], 1)} h</span>`).join('')}</div>`;
       cuerpo = leyenda + `<svg class="chart" viewBox="0 0 ${ancho} ${alto}" role="img" aria-label="Horas por labor">${grid}<line class="axis" x1="${l}" x2="${ancho - r}" y1="${Y(0)}" y2="${Y(0)}"/>${barras}</svg>`;
     }
-    $('cDistrib').innerHTML = encabezado(`Distribución del tiempo · ${quien}`, `Horas laboradas por ${distPeriodo === 'dia' ? 'día' : distPeriodo}, separadas por labor. Toca un color para filtrar por esa labor, o la fecha debajo de una barra para ver solo ese período.`, controles) + cuerpo;
+    $('cDistrib').innerHTML = encabezado(`Distribución del tiempo · ${quien}`, `Horas laboradas por ${distPeriodo === 'dia' ? 'día' : distPeriodo}, separadas por labor. Toca un color para filtrar por esa labor, o la fecha debajo de una barra para ver solo ese período.`, controles) + chips + cuerpo;
     $('distSeg').addEventListener('click', e => { const bt = e.target.closest('[data-p]'); if (bt) { distPeriodo = bt.dataset.p; render(); } });
     $('distPersona').addEventListener('change', e => { distPersona = e.target.value; if ($('fPersona').value && distPersona !== $('fPersona').value) $('fPersona').value = ''; render(); });
   }
@@ -478,6 +484,11 @@ const Dashboard = (() => {
     opciones($('fLider'), [...new Set(todas.map(liderDe).filter(Boolean))].sort().map(x => [x, x]), 'Todos');
     opciones($('fLugar'), [...new Set(todas.map(lugar).filter(Boolean))].sort().map(b => [b, b]), 'Todos');
     const filas = filtrar(todas);
+    // Áreas con datos en el rango (sin el filtro de área), para los botones de la gráfica de distribución.
+    const fa = $('fArea').value;
+    $('fArea').value = '';
+    areasRango = [...new Set(filtrar(todas).map(areaDe))].sort();
+    $('fArea').value = fa;
     ultimas = filas;
     pintarResumen();
     kpis(filas); promMax(filas); horasLabor(filas); porPersona(filas); distribucion(filas); tendencia(filas); revision(filas); bloques(filas);
