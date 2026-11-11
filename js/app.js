@@ -149,7 +149,9 @@
     const activos = S.empleados.filter(e => Calc.norm(e.estado) !== 'RETIRADO' && !S.sel.includes(String(e.cedula)));
     if (!Calc.norm(q)) return [];
     const res = Calc.buscar(activos, q, 'nombre', ['cedula']);
-    const campo = e => /CULTIVO|MIPE PRODUCCION/.test(Calc.norm(e.area)) ? 0 : 1;
+    // Primero las personas del área que se está registrando (el texto del área de la base se parece al del área de la app).
+    const claves = Calc.norm(S.area).split(/\s+/).map(w => w.slice(0, 4));
+    const campo = e => { const a = Calc.norm(e.area); return a && claves.every(k => a.includes(k)) ? 0 : /CULTIVO|MIPE PRODUCCION/.test(a) && Calc.esCultivo(S.area) ? 1 : 2; };
     return res.sort((a, b) => campo(a) - campo(b) || a.nombre.localeCompare(b.nombre)).slice(0, 8);
   }
 
@@ -839,8 +841,11 @@
   }
 
   // Busca la hoja y la fila de encabezados que contienen las columnas pedidas.
+  // `preferida` puede ser un nombre o una lista en orden de preferencia (se busca primero en esas hojas).
   function tabla(wb, preferida, requeridas) {
-    const hojas = [...wb.SheetNames].sort((a, b) => (Calc.norm(b).includes(preferida) ? 1 : 0) - (Calc.norm(a).includes(preferida) ? 1 : 0));
+    const prefs = [].concat(preferida);
+    const rango = n => { const i = prefs.findIndex(p => Calc.norm(n).replace(/\s+/g, '').includes(p)); return i < 0 ? prefs.length : i; };
+    const hojas = [...wb.SheetNames].sort((a, b) => rango(a) - rango(b));
     for (const nombre of hojas) {
       const filas = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, defval: '', raw: true });
       for (let i = 0; i < Math.min(15, filas.length); i++) {
@@ -855,18 +860,30 @@
 
   async function importarEmpleados(file) {
     const wb = await leerExcel(file);
-    const t = tabla(wb, 'EMPLEADO', { nombre: ['NOMBRE'], cedula: ['CEDULA'], estado: ['ESTADO'] });
+    // El control de ausentismos trae la base completa (activos y retirados) en la hoja BDCecos.
+    const t = tabla(wb, ['BDCECOS', 'EMPLEADO'], { nombre: ['NOMBRE'], cedula: ['CEDULA'], estado: ['ESTADO'] });
     if (!t) throw new Error('No encontré una hoja con columnas NOMBRE, ESTADO y CEDULA.');
     const col = p => t.enc.findIndex(h => h.startsWith(p));
-    const iL = col('LUGAR'), iC = col('CARGO'), iA = col('AREA');
-    const lista = t.filas.filter(f => String(f[t.idx.nombre]).trim() && String(f[t.idx.cedula]).trim()).map(f => ({
+    const iL = col('LUGAR'), iC = col('CARGO'), iA = col('AREA'), iF = col('FECHA DEL CAMBIO'), iI = col('FECHA DE INGRESO');
+    const fechaNum = v => (v instanceof Date ? v.getTime() : typeof v === 'number' ? v * 864e5 : Date.parse(v) || 0);
+    const filas = t.filas.filter(f => String(f[t.idx.nombre]).trim() && String(f[t.idx.cedula]).trim()).map(f => ({
       nombre: String(f[t.idx.nombre]).trim().replace(/\s+/g, ' '),
       estado: String(f[t.idx.estado]).trim().toUpperCase(),
       cedula: String(f[t.idx.cedula]).trim().replace(/\.0$/, ''),
       lugar: iL >= 0 ? String(f[iL]).trim() : '',
       cargo: iC >= 0 ? String(f[iC]).trim() : '',
       area: iA >= 0 ? String(f[iA]).trim() : '',
+      _orden: [iF >= 0 ? fechaNum(f[iF]) : 0, iI >= 0 ? fechaNum(f[iI]) : 0],
     }));
+    // Una cédula puede venir varias veces (cambios de centro de costo o reingresos): queda la más
+    // reciente según la fecha del cambio de CECO, luego la de ingreso y, si empatan, la fila de más abajo.
+    const porCed = new Map();
+    filas.forEach(e => {
+      const y = porCed.get(e.cedula);
+      if (!y || e._orden[0] > y._orden[0] || (e._orden[0] === y._orden[0] && e._orden[1] >= y._orden[1])) porCed.set(e.cedula, e);
+    });
+    porCed.forEach(e => delete e._orden);
+    const lista = [...porCed.values()];
     if (!lista.length) throw new Error('La hoja de empleados está vacía.');
     // Conserva a quienes ya no están en el Excel como RETIRADO para no perder su historial.
     const nuevos = new Set(lista.map(e => e.cedula));
