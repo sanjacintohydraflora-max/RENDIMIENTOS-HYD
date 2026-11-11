@@ -283,9 +283,16 @@
     <div class="card">
       <h2>Base de empleados</h2>
       <p class="sub" id="empStatus"></p>
-      <p class="sub">Sube el Excel con la hoja <b>DATA EMPLEADOS</b> (columnas NOMBRE, ESTADO, CEDULA, LUGARDE TRABAJO, CARGO, AREA). Reemplaza la lista: quien aparezca RETIRADO deja de salir en las sugerencias pero su historial se conserva.</p>
+      <p class="sub">Sube el <b>Control Total de Ausentismos</b> (se lee la hoja <b>BDCecos</b>, una fila por persona: la del cambio de CECO más reciente) o un Excel con la hoja <b>DATA EMPLEADOS</b>. Reemplaza la lista: quien aparezca RETIRADO deja de salir en las sugerencias pero su historial se conserva.</p>
       <input type="file" id="fileEmp" accept=".xlsx,.xls,.csv" class="hidden">
       <button type="button" class="btn" id="btnEmp">Cargar Excel de empleados</button>
+    </div>
+    <div class="card">
+      <h2>Rendimientos históricos</h2>
+      <p class="sub">Sube los Excel que se llenaban antes de la app (<b>03 RENDIMIENTOS POSCOSECHAS</b> o <b>04 RENDIMIENTOS COMERCIALIZADORA</b>). Se lee la hoja RENDIMIENTOS y se envía a la hoja de Google para verlo en el dashboard. Si cargas el mismo archivo otra vez, las filas se reemplazan, no se duplican. Mejor hacerlo desde un computador.</p>
+      <input type="file" id="fileHist" accept=".xlsx,.xls" class="hidden">
+      <button type="button" class="btn" id="btnHist">Cargar Excel de rendimientos históricos</button>
+      <p class="hint" id="histStatus"></p>
     </div>
     <div class="card">
       <h2>Labores e inventario de plantas</h2>
@@ -384,6 +391,7 @@
   <script src="js/calc.js" defer></script>
   <script src="js/sync.js" defer></script>
   <script src="js/dashboard.js" defer></script>
+  <script src="js/historico.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>
 </html>

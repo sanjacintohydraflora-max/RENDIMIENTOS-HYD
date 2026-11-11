@@ -1219,6 +1219,33 @@
         } catch (e) { toast(`Error: ${e.message}`, 5000); }
       });
     };
+    // Rendimientos históricos: se convierten y se envían directo a la hoja de Google.
+    $('btnHist').addEventListener('click', async () => {
+      const s = await DB.getMeta('sync', { url: '' });
+      if (!s.url) { toast('Primero configura la conexión con la hoja de Google (más abajo).', 4000); return; }
+      $('fileHist').click();
+    });
+    $('fileHist').addEventListener('change', async () => {
+      const f = $('fileHist').files[0];
+      $('fileHist').value = '';
+      if (!f) return;
+      const st = $('histStatus');
+      $('btnHist').disabled = true;
+      try {
+        st.textContent = `Leyendo ${f.name}…`;
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', sheets: ['RENDIMIENTOS'] });
+        const r = Historico.convertir(wb.SheetNames.length ? wb : XLSX.read(buf, { type: 'array' }), f.name, S.labores);
+        if (!r.registros.length) throw new Error('no encontré filas de rendimientos.');
+        const areas = Object.entries(r.porArea).map(([a, n]) => `${a}: ${n.toLocaleString('es-CO')}`).join(' · ');
+        if (!confirm(`Se enviarán ${r.registros.length.toLocaleString('es-CO')} filas del ${r.desde} al ${r.hasta} a la hoja de Google.\n${areas}\n¿Continuar?`)) { st.textContent = ''; return; }
+        await Historico.enviar(r.registros, (n, t) => { st.textContent = `Enviando a la hoja… ${n.toLocaleString('es-CO')} de ${t.toLocaleString('es-CO')} filas`; });
+        st.textContent = `Listo: ${r.registros.length.toLocaleString('es-CO')} filas del ${r.desde} al ${r.hasta} quedaron en la hoja (${areas}).${r.omitidas ? ` ${r.omitidas} filas incompletas no se cargaron.` : ''}`;
+        toast('Rendimientos históricos cargados. Ya se ven en el dashboard.', 4000);
+      } catch (e) {
+        st.textContent = `No se pudo cargar: ${e.message}. Lo que alcanzó a enviarse quedó en la hoja; puedes volver a cargar el archivo sin duplicar.`;
+      } finally { $('btnHist').disabled = false; }
+    });
     const alServidor = async (tipo, datos) => {
       const s = await DB.getMeta('sync', { url: '' });
       if (!s.url || !navigator.onLine) return ' Se subirá a la hoja de Google al conectar la sincronización.';

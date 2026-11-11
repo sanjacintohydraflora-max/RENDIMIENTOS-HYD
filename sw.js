@@ -1,10 +1,10 @@
 // Service worker: guarda la app en el celular para abrirla sin señal.
 // Cambia VERSION en cada publicación para que los celulares bajen la versión nueva.
-const VERSION = 'v37';
+const VERSION = 'v38';
 const CACHE = `rendimientos-${VERSION}`;
 const ARCHIVOS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/db.js', 'js/calc.js', 'js/sync.js', 'js/dashboard.js', 'js/app.js',
+  'js/db.js', 'js/calc.js', 'js/sync.js', 'js/dashboard.js', 'js/historico.js', 'js/app.js',
   'vendor/xlsx.full.min.js', 'vendor/qrcode.js', 'data/labores.json', 'data/camas.json',
   'icons/logo.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
