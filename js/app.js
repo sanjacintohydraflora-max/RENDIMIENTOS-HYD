@@ -709,31 +709,35 @@
     const delDia = f && f !== S.diaPendiente ? regs.filter(r => r.fecha === f) : [];
     const faltan = Object.fromEntries(Calc.incompletosDelDia(delDia, f, cfgA()).map(p => [p.ced, p]));
     const guardadas = delDia.filter(r => r.estado !== 'abierto' && r.id !== S.editId && r.empleados.some(c => faltan[c]) && (!conPersona || deLaPersona(r)));
-    const abiertos = [...sinTerminar, ...guardadas]
-      .sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.horaInicio || '').localeCompare(b.horaInicio || ''));
-    $('abiertosCard').classList.toggle('hidden', !abiertos.length);
-    if (!abiertos.length) return;
-    const personas = new Set(abiertos.flatMap(r => r.empleados)).size;
-    $('abiertosTitulo').textContent = conPersona
-      ? `Incompletos de esta persona (${abiertos.length})`
-      : `Incompletos: ${abiertos.length} registro${abiertos.length > 1 ? 's' : ''} de ${personas} persona${personas > 1 ? 's' : ''}`;
-    const abierta = conPersona || S.verAbiertos;
-    $('abiertosVer').classList.toggle('hidden', conPersona);
+    const abiertos = [...sinTerminar, ...guardadas];
+    // Una fila por persona y día: el detalle de sus labores sale en "Hoy" al tocar Completar.
+    const grupos = new Map();
+    abiertos.forEach(r => r.empleados.filter(c => !conPersona || ced.includes(c)).forEach(c => {
+      if (r.estado !== 'abierto' && !(r.fecha === f && faltan[c])) return;
+      // Con la persona elegida, su día actual ya se ve en "Hoy".
+      if (conPersona && r.fecha === f) return;
+      const k = `${r.fecha}|${c}`;
+      const g = grupos.get(k) || grupos.set(k, { fecha: r.fecha, ced: c, nombre: S.empMap[c]?.nombre || r.nombres?.[c] || c, abiertos: 0 }).get(k);
+      if (r.estado === 'abierto') g.abiertos++;
+    }));
+    const lista = [...grupos.values()].map(g => {
+      const delGrupo = regs.filter(r => r.fecha === g.fecha && r.empleados.includes(g.ced));
+      const horas = delGrupo.filter(r => r.estado !== 'abierto').reduce((a, r) => a + Calc.calcular(r, cfgA(), null).tiempoLab, 0);
+      return { ...g, labores: delGrupo.length, horas, meta: Calc.jornadaDia(cfgA(), g.fecha) };
+    }).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
+    $('abiertosCard').classList.toggle('hidden', !lista.length);
+    if (!lista.length) return;
+    $('abiertosTitulo').textContent = conPersona ? `Días incompletos de esta persona (${lista.length})`
+      : `Incompletos: ${lista.length} persona${lista.length > 1 ? 's' : ''}`;
+    const abierta = conPersona || S.verAbiertos || lista.length <= 8;
+    $('abiertosVer').classList.toggle('hidden', conPersona || lista.length <= 8);
     $('abiertosVer').textContent = S.verAbiertos ? 'Ocultar' : 'Ver';
     $('abiertosLista').classList.toggle('hidden', !abierta);
-    $('abiertosLista').innerHTML = !abierta ? '' : abiertos.map(r => {
-      const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
-      const t = Calc.tramosDe(r).map(x => `${x.bloque} L${x.lote}`).join(', ');
-      const abierto = r.estado === 'abierto';
-      const falta = abierto ? null : r.empleados.map(c => faltan[c]).find(Boolean);
-      const nota = abierto ? '<span class="flag-low">sin terminar</span>' : `${esc(r.horaInicio)}–${esc(r.horaFin)} · <span class="flag-low">faltan ${fmt(falta.meta - falta.horas, 2)} h del día</span>`;
-      return `<div class="cad-item">
-        <span class="cad-h">${esc(r.fecha.slice(5).split('-').reverse().join('/'))} ${esc(r.horaInicio)}</span>
-        <span class="cad-l"><b>${esc(conPersona ? r.labor : nombres)}</b><small>${nota}${(conPersona ? t : 1) ? ` · ${esc(conPersona ? t : r.labor + (t ? ` · ${t}` : ''))}` : ''}</small></span>
-        <button type="button" class="btn small ${abierto ? 'primary' : ''}" data-editar="${r.id}">${abierto ? 'Completar' : 'Editar'}</button>
-        <button type="button" class="btn small danger" data-borrar="${r.id}" aria-label="Eliminar">✕</button>
-      </div>`;
-    }).join('');
+    $('abiertosLista').innerHTML = !abierta ? '' : lista.map(g => `<div class="cad-item">
+        <span class="cad-h">${esc(fechaCorta(g.fecha).slice(0, 5))}</span>
+        <span class="cad-l"><b>${esc(g.nombre)}</b><small>${g.labores} labor${g.labores > 1 ? 'es' : ''} · ${fmt(g.horas, 2)} h${g.meta ? ` de ${fmt(g.meta, 2)}` : ''}${g.meta && g.horas < g.meta - 0.02 ? ` · <span class="flag-low">faltan ${fmt(g.meta - g.horas, 2)} h</span>` : ''}${g.abiertos ? ` · <span class="flag-low">${g.abiertos} sin terminar</span>` : ''}</small></span>
+        <button type="button" class="btn small primary" data-completar-ced="${esc(g.ced)}" data-completar-fecha="${g.fecha}">Completar</button>
+      </div>`).join('');
   }
 
   // ---------- Registros del día ----------
@@ -1161,6 +1165,8 @@
       if (e) editarTramo(+e.dataset.tramo);
     });
     $('abiertosLista').addEventListener('click', ev => {
+      const c = ev.target.closest('[data-completar-ced]');
+      if (c) { completarDia(c.dataset.completarCed, c.dataset.completarFecha); return; }
       const e = ev.target.closest('[data-editar]'); if (e) cargarEnFormulario(e.dataset.editar);
       const d = ev.target.closest('[data-borrar]'); if (d) borrar(d.dataset.borrar);
     });
