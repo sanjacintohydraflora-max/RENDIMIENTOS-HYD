@@ -290,10 +290,13 @@ const Calc = (() => {
     otros.filter(o => o.id !== reg.id && o.fecha === reg.fecha).forEach(o => {
       const oa = minutos(o.horaInicio), ob = fin(o);
       if (oa == null || !(a < ob && oa < b)) return;
+      // Si el otro registro es de otra área, se dice dónde está para poder encontrarlo en Registros.
+      const ao = AREA_ANTES[o.area] || o.area || AREA_BASE, ar = AREA_ANTES[reg.area] || reg.area || AREA_BASE;
+      const donde = ao !== ar ? ` (registrado en el área ${ao}; aparece en Registros, abajo, en "otras áreas")` : '';
       reg.empleados.filter(c => o.empleados.includes(c)).forEach(c => {
         msgs.push(o.estado === 'abierto'
-          ? `${nombre(c)} tiene ${o.labor} sin terminar desde las ${o.horaInicio}. Termínalo antes de asignarle otra labor.`
-          : `${nombre(c)} ya está en ${o.labor} de ${o.horaInicio} a ${o.horaFin}; el horario se cruza.`);
+          ? `${nombre(c)} tiene ${o.labor} sin terminar desde las ${o.horaInicio}${donde}. Termínalo antes de asignarle otra labor.`
+          : `${nombre(c)} ya está en ${o.labor} de ${o.horaInicio} a ${o.horaFin}${donde}; el horario se cruza.`);
       });
     });
     return [...new Set(msgs)];

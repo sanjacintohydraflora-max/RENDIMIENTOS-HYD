@@ -737,14 +737,22 @@
   // ---------- Registros del día ----------
   async function pintarHoy() {
     const f = $('hoyFecha').value || hoyStr();
-    const regs = (await DB.registrosPorFecha(f)).filter(delArea).sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
+    const delDia = (await DB.registrosPorFecha(f)).sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''));
+    const regs = delDia.filter(delArea);
+    // Los de otras áreas en este celular también ocupan el horario de la persona: se muestran aparte.
+    const otras = delDia.filter(r => !delArea(r));
     const lista = $('hoyLista');
+    const otrasHtml = otras.length ? `<div class="dia-sub" style="margin-top:14px">Registrados en otras áreas en este celular (${otras.length})</div>${otras.map(r => itemReg(r, true)).join('')}` : '';
     if (!regs.length) {
-      lista.innerHTML = '<div class="empty">No hay registros en este día.</div>';
+      lista.innerHTML = '<div class="empty">No hay registros de esta área en este día.</div>' + otrasHtml;
       $('hoyHoras').innerHTML = '<div class="empty">Sin datos.</div>';
       return;
     }
-    lista.innerHTML = regs.map(r => {
+    lista.innerHTML = regs.map(r => itemReg(r)).join('') + otrasHtml;
+    pintarHorasDia(regs, f);
+  }
+
+  function itemReg(r, conArea = false) {
       const c = Calc.calcular(r, cfgReg(r), S.empMap);
       const nombres = r.empleados.map(x => S.empMap[x]?.nombre || r.nombres?.[x] || x).join(', ');
       const unidad = c.tipo === 'tiempo' ? 'plantas' : c.tipo;
@@ -756,7 +764,7 @@
       ].filter(Boolean).join(' · ');
       return `<div class="reg">
         <div class="r-main">
-          <div class="r-t">${esc(r.labor)} ${r.empleados.length > 1 ? `<span class="badge gr">Grupo ${r.empleados.length}</span>` : ''}${r.extras ? ' <span class="badge tallos">Horas extras</span>' : ''}</div>
+          <div class="r-t">${esc(r.labor)} ${conArea ? `<span class="badge">${esc(areaReg(r))}</span> ` : ''}${r.empleados.length > 1 ? `<span class="badge gr">Grupo ${r.empleados.length}</span>` : ''}${r.extras ? ' <span class="badge tallos">Horas extras</span>' : ''}</div>
           <div class="r-s">${esc(nombres)}</div>
           <div class="r-s">${esc(det)}</div>
           ${r.obs ? `<div class="r-s">${esc(r.obs)}</div>` : ''}
@@ -767,9 +775,10 @@
           <button type="button" class="btn small danger" data-borrar="${r.id}">Borrar</button>
         </div>
       </div>`;
-    }).join('');
+  }
 
-    // Horas por persona y cruces de horario
+  // Horas por persona y cruces de horario
+  function pintarHorasDia(regs, f) {
     const porPersona = {};
     regs.forEach(r => {
       const c = Calc.calcular(r, cfgReg(r), S.empMap);
