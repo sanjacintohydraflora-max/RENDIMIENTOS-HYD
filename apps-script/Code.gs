@@ -42,6 +42,10 @@ function configurar() {
   const ss = SpreadsheetApp.getActive();
   Object.keys(HOJAS).forEach(nombre => {
     const h = ss.getSheetByName(nombre) || ss.insertSheet(nombre);
+    // Una pestaña que ya tiene encabezados no se reescribe (cambiar su orden desalinearía los datos):
+    // solo se agregan al final las columnas que falten.
+    const yaTiene = h.getLastColumn() > 0 && h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0].some(String);
+    if (yaTiene) { asegurarColumnas(h, nombre); return; }
     const enc = HOJAS[nombre];
     h.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold');
     h.setFrozenRows(1);
@@ -51,6 +55,38 @@ function configurar() {
   });
   const hoja1 = ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
   if (hoja1 && ss.getSheets().length > 1) ss.deleteSheet(hoja1);
+}
+
+/**
+ * Arreglo de una sola vez (2026-11-25): los encabezados de RENDIMIENTOS se reescribieron en el orden nuevo
+ * (AREA después de FECHA) pero las filas anteriores siguen en el orden viejo (AREA después de ACTUALIZADO).
+ * Se reconocen porque su fecha de ACTUALIZADO quedó una columna antes. Ejecutarla otra vez no cambia nada.
+ */
+function repararColumnas() {
+  const h = hoja('RENDIMIENTOS');
+  const n = h.getLastRow() - 1, m = h.getLastColumn();
+  if (n < 1) return 'Sin filas';
+  const enc = h.getRange(1, 1, 1, m).getValues()[0].map(String);
+  const iArea = enc.indexOf('AREA'), iAct = enc.indexOf('ACTUALIZADO');
+  if (iArea < 0 || iAct < 0 || iArea > iAct) throw new Error('Los encabezados no tienen el orden esperado; no se cambió nada.');
+  // Orden viejo: el de ahora sin AREA, con AREA justo después de ACTUALIZADO.
+  const viejo = enc.slice();
+  viejo.splice(iArea, 1);
+  viejo.splice(viejo.indexOf('ACTUALIZADO') + 1, 0, 'AREA');
+  const donde = enc.map(c => viejo.indexOf(c));
+  const esFecha = v => v instanceof Date || /^\d{4}-\d\d-\d\dT/.test(String(v));
+  const rango = h.getRange(2, 1, n, m);
+  const v = rango.getValues();
+  let arregladas = 0;
+  const nuevas = v.map(f => {
+    if (!(esFecha(f[iAct - 1]) && !esFecha(f[iAct]))) return f;
+    arregladas++;
+    return donde.map(j => (j >= 0 ? f[j] : ''));
+  });
+  if (arregladas) rango.setValues(nuevas);
+  const msg = 'Filas arregladas: ' + arregladas + ' de ' + n;
+  Logger.log(msg);
+  return msg;
 }
 
 /** Cambia la clave sin tocar el código: ejecuta cambiarClave('nueva') desde el editor. */
