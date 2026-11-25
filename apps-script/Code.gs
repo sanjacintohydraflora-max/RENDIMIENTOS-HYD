@@ -161,12 +161,34 @@ function leer(nombre) {
   return { h: h, enc: v[0].map(String), datos: v.slice(1) };
 }
 
+/** Solo la fila de encabezados (y el número de filas), sin leer los datos. */
+function encabezados(nombre) {
+  const h = hoja(nombre);
+  asegurarColumnas(h, nombre);
+  return { h: h, enc: h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0].map(String), n: Math.max(h.getLastRow() - 1, 0) };
+}
+
+/** Los valores de una sola columna (sin el encabezado). */
+function columna(t, nombre) {
+  const i = t.enc.indexOf(nombre);
+  if (i < 0 || !t.n) return [];
+  return t.h.getRange(2, i + 1, t.n, 1).getValues().map(f => f[0]);
+}
+
+/** Fecha como AAAA-MM-DD sin pasar por formatDate (que es lento con miles de celdas). */
+function diaDe(v) {
+  if (v instanceof Date) return v.getFullYear() + '-' + ('0' + (v.getMonth() + 1)).slice(-2) + '-' + ('0' + v.getDate()).slice(-2);
+  return String(v).slice(0, 10);
+}
+
 /** Reemplaza las filas de cada registro recibido (así una edición no duplica) y borra los eliminados. */
 function guardar(registros, borrados) {
-  const t = leer('RENDIMIENTOS');
+  const t = encabezados('RENDIMIENTOS');
   // Se escribe según el orden real de la hoja (las columnas nuevas pueden estar al final).
   const enc = t.enc.length ? t.enc : HOJAS.RENDIMIENTOS;
-  const iReg = t.enc.indexOf('ID REGISTRO');
+  // Para encontrar las filas a reemplazar basta la columna ID REGISTRO, no toda la hoja.
+  t.datos = columna(t, 'ID REGISTRO').map(x => [x]);
+  const iReg = 0;
   const quitar = {};
   registros.forEach(r => { quitar[r.id] = true; });
   borrados.forEach(id => { quitar[id] = true; });
@@ -205,14 +227,26 @@ function texto(v, col) {
 }
 
 function filas(desde, hasta, formato) {
-  const t = leer('RENDIMIENTOS');
-  // Se filtra por fecha antes de convertir cada fila: con miles de filas históricas es lo que más tarda.
-  const iF = t.enc.indexOf('FECHA'), iId = t.enc.indexOf('ID FILA');
-  const datos = t.datos.filter(f => {
-    if (iId >= 0 && f[iId] === '') return false;
-    const d = String(texto(f[iF], 'FECHA'));
-    return (!desde || d >= desde) && (!hasta || d <= hasta);
-  }).map(f => t.enc.map((c, i) => {
+  const t = encabezados('RENDIMIENTOS');
+  // Primero se lee solo la columna FECHA y después únicamente los bloques de filas del rango pedido:
+  // leer la hoja completa (miles de filas históricas) era lo que hacía lento al servidor.
+  const fechas = columna(t, 'FECHA');
+  const quedan = [];
+  fechas.forEach((v, i) => { if (v === '') return; const d = diaDe(v); if ((!desde || d >= desde) && (!hasta || d <= hasta)) quedan.push(i); });
+  const tramos = [];
+  quedan.forEach(i => { const u = tramos[tramos.length - 1]; if (u && i === u[1] + 1) u[1] = i; else tramos.push([i, i]); });
+  const m = t.enc.length;
+  let crudas = [];
+  if (tramos.length > 40) {
+    // Muy dispersas: un solo bloque desde la primera hasta la última es más rápido que muchas lecturas.
+    const ini = quedan[0], fin = quedan[quedan.length - 1];
+    const bloque = t.h.getRange(ini + 2, 1, fin - ini + 1, m).getValues();
+    crudas = quedan.map(i => bloque[i - ini]);
+  } else {
+    tramos.forEach(([ini, fin]) => { crudas = crudas.concat(t.h.getRange(ini + 2, 1, fin - ini + 1, m).getValues()); });
+  }
+  const iId = t.enc.indexOf('ID FILA');
+  const datos = crudas.filter(f => iId < 0 || f[iId] !== '').map(f => t.enc.map((c, i) => {
     const v = texto(f[i], c);
     return c === 'CEDULA' || c === 'LOTE' ? String(v) : v;
   }));
