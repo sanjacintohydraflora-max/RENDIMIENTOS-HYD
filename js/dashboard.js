@@ -3,12 +3,14 @@
 const Dashboard = (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmt = (x, d = 0) => Number(x || 0).toLocaleString('es-CO', { maximumFractionDigits: d, minimumFractionDigits: d });
+  // Un formateador por número de decimales: crear uno en cada celda hacía lenta la tabla de revisión.
+  const formatos = {};
+  const fmt = (x, d = 0) => (formatos[d] ||= new Intl.NumberFormat('es-CO', { maximumFractionDigits: d, minimumFractionDigits: d })).format(Number(x || 0));
   const fechaStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const corto = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const numSort = (a, b) => parseFloat(String(a).replace(/[^\d.]/g, '')) - parseFloat(String(b).replace(/[^\d.]/g, '')) || String(a).localeCompare(String(b));
 
-  let ctx = null, servidor = null, enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '', kpiAbierto = '', rangoAntes = null, areasRango = [];
+  let ctx = null, servidor = null, servidorRango = '', enlazado = false, laborPersona = '', laborTend = '', laborBloque = '', distPeriodo = 'dia', distPersona = '', kpiAbierto = '', rangoAntes = null, areasRango = [];
 
   // ---------- Datos ----------
   function rango(tipo) {
@@ -66,29 +68,86 @@ const Dashboard = (() => {
 
   const limpiarPeriodo = () => { $('fAnio').value = ''; $('fMes').value = ''; $('fSemana').value = ''; pintarSemanas(); };
 
+  // Las filas de este celular se leen una vez al abrir el dashboard (mientras se mira no cambian)
+  // y la mezcla con el servidor se guarda hasta que lleguen datos nuevos: así filtrar no vuelve a calcular todo.
+  let locales = null, borrados = new Set(), combinadas = null;
   async function filasCombinadas() {
-    const locales = await ctx.filasLocales();
-    const borrados = new Set(await DB.getMeta('borrados', []));
+    if (combinadas) return combinadas;
+    locales ||= await ctx.filasLocales();
     const porId = new Map();
     (servidor || []).forEach(f => { if (!borrados.has(f['ID REGISTRO'])) porId.set(f['ID FILA'], f); });
     // Los registros de este celular reemplazan los del servidor: son la versión más reciente aquí.
     const regsLocales = new Set(locales.map(f => f['ID REGISTRO']));
     for (const [k, f] of porId) if (regsLocales.has(f['ID REGISTRO'])) porId.delete(k);
     locales.forEach(f => porId.set(f['ID FILA'], f));
-    return [...porId.values()].map(f => ({ ...f, FECHA: String(f.FECHA).slice(0, 10) }));
+    combinadas = [...porId.values()].map(f => ({ ...f, FECHA: String(f.FECHA).slice(0, 10) }));
+    return combinadas;
   }
 
-  async function traerServidor() {
-    const s = await DB.getMeta('sync', { url: '' });
-    if (!s.url) { $('dashSource').textContent = 'Mostrando datos de este celular (sin servidor configurado).'; return; }
-    if (!navigator.onLine) { $('dashSource').textContent = 'Sin señal: mostrando datos de este celular.'; return; }
-    $('dashSource').textContent = 'Consultando servidor…';
-    try {
-      servidor = await Sync.filas($('fDesde').value, $('fHasta').value);
-      $('dashSource').textContent = `Servidor y celular combinados · ${new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
-    } catch (e) {
-      $('dashSource').textContent = `No se pudo consultar el servidor (${e.message}); mostrando datos de este celular.`;
+  // Lo que ya se trajo del servidor se guarda por rango de fechas. Un rango que cabe dentro de otro ya traído
+  // se muestra al instante y el servidor se consulta por detrás; solo se espera cuando no hay nada guardado.
+  const cache = new Map();
+  const FRESCO = 2 * 60 * 1000;
+  const hora = t => new Date(t).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  function desdeCache(d, h) {
+    let mejor = null;
+    for (const [k, v] of cache) {
+      const [cd, ch] = k.split('|');
+      if ((!cd || (d && cd <= d)) && (!ch || (h && ch >= h)) && (!mejor || v.t > mejor.t)) mejor = v;
     }
+    return mejor;
+  }
+  function usar(filas, clave) {
+    servidor = filas; servidorRango = clave; combinadas = null;
+  }
+
+  // Deja listos los datos del servidor para el rango elegido. Devuelve una promesa que se cumple cuando la
+  // consulta de fondo termina con datos nuevos (para volver a dibujar), o null si no hace falta consultar.
+  let consulta = 0;
+  async function traerServidor({ forzar = false } = {}) {
+    const s = await DB.getMeta('sync', { url: '' });
+    if (!s.url) { $('dashSource').textContent = 'Mostrando datos de este celular (sin servidor configurado).'; return null; }
+    const d = $('fDesde').value, h = $('fHasta').value;
+    const c = desdeCache(d, h);
+    // Los rangos rápidos (7 días, semana, 30 días, mes) terminan hoy: se traen todos juntos en una sola consulta
+    // para que cambiar entre ellos sea inmediato.
+    const rapidos = ['7', 'sem', '30', 'mes'].map(rango), hoy = rapidos[0][1];
+    const ancho = [rapidos.map(r => r[0]).sort()[0], hoy];
+    const [qd, qh] = h === hoy && d >= ancho[0] ? ancho : [d, h];
+    const clave = `${qd}|${qh}`;
+    if (c) {
+      if (servidorRango !== c.clave) usar(c.filas, c.clave);
+      $('dashSource').textContent = `Servidor y celular combinados · ${hora(c.t)}`;
+      if (!forzar && Date.now() - c.t < FRESCO) return null;
+    }
+    if (!navigator.onLine) { if (!c) $('dashSource').textContent = 'Sin señal: mostrando datos de este celular.'; return null; }
+    const n = ++consulta;
+    if (!c) $('dashSource').textContent = 'Consultando servidor…';
+    else $('dashSource').textContent += ' · actualizando…';
+    $('view-dashboard').classList.toggle('dash-cargando', !c);
+    const pedido = Sync.filas(qd, qh).then(filas => {
+      const v = { clave, filas, t: Date.now() };
+      cache.set(clave, v);
+      if (cache.size > 6) cache.delete(cache.keys().next().value);
+      DB.setMeta('dashCache', v).catch(() => {});
+      if (n !== consulta) return false;
+      usar(filas, clave);
+      $('dashSource').textContent = `Servidor y celular combinados · ${hora(v.t)}`;
+      return true;
+    }).catch(e => {
+      if (n === consulta) $('dashSource').textContent = `No se pudo consultar el servidor (${e.message}); ${c ? `mostrando lo traído a las ${hora(c.t)}` : 'mostrando datos de este celular'}.`;
+      return false;
+    });
+    // Sin nada guardado para este rango se espera la respuesta; con algo guardado se dibuja ya y se actualiza después.
+    if (!c) { await pedido; if (n === consulta) $('view-dashboard').classList.remove('dash-cargando'); return null; }
+    return pedido;
+  }
+
+  // Cambio de rango: dibuja de una vez con lo que haya y vuelve a dibujar si el servidor trae algo nuevo.
+  async function cambiarRango(opc) {
+    const fondo = await traerServidor(opc);
+    await render();
+    if (fondo && await fondo) render();
   }
 
   function filtrar(filas) {
@@ -429,8 +488,8 @@ const Dashboard = (() => {
     // La jornada esperada depende del horario del área y del día de la semana.
     const celda = (h, area, fecha) => {
       if (!h) return '<td class="c" style="color:var(--text-3)">·</td>';
-      const jornada = ctx.jornada(area, fecha);
-      const bajo = jornada > 0 && h < jornada - 0.02, alto = jornada > 0 && h > jornada + 1;
+      const j = jornada(area, fecha);
+      const bajo = j > 0 && h < j - 0.02, alto = j > 0 && h > j + 1;
       const st = bajo ? 'background:var(--warn-soft);color:var(--warn);font-weight:600' : alto ? 'background:var(--bad-soft);color:var(--bad);font-weight:600' : '';
       return `<td class="c" style="${st}" title="${fmt(h, 2)} h${bajo ? ' · incompleto' : alto ? ' · excede la jornada' : ''}">${fmt(h, 1)}${bajo ? '↓' : alto ? '↑' : ''}</td>`;
     };
@@ -470,11 +529,29 @@ const Dashboard = (() => {
   }
 
   // Ancho real de la tarjeta, para que el texto de los gráficos se lea a 12 px en celular y PC.
-  const anchoDe = id => Math.max(300, ($(id).clientWidth || 640) - 34);
+  // Se miden todas de una vez antes de dibujar: medir entre dibujo y dibujo obligaba al navegador a recalcular la página.
+  let anchos = {};
+  const ANCHOS = ['kpiDetalle', 'cPromMax', 'cHorasLabor', 'cPersona', 'cTendencia', 'cDistrib', 'cBloques'];
+  function medirAnchos() {
+    const base = $('kpis').clientWidth || 640;
+    anchos = Object.fromEntries(ANCHOS.map(id => [id, $(id)?.clientWidth || base]));
+  }
+  const anchoDe = id => Math.max(300, (anchos[id] || $(id).clientWidth || 640) - 34);
+  // La jornada de un área en una fecha se calcula una sola vez por dibujo.
+  let jornadas = new Map();
+  const jornada = (area, fecha) => { const k = `${area}|${fecha}`; if (!jornadas.has(k)) jornadas.set(k, ctx.jornada(area, fecha)); return jornadas.get(k); };
 
   let ultimas = [];
-  async function render() {
+  // Varios toques seguidos se juntan en un solo dibujo, en el siguiente cuadro de pantalla.
+  let pendiente = null;
+  function render() {
+    pendiente ||= new Promise(ok => requestAnimationFrame(() => { pendiente = null; dibujar().then(ok, e => { console.error(e); ok(); }); }));
+    return pendiente;
+  }
+  async function dibujar() {
     const todas = await filasCombinadas();
+    medirAnchos();
+    jornadas = new Map();
     // Opciones de filtros con todo el rango para no perder selecciones.
     opciones($('fLabor'), [...new Set(todas.map(f => f.LABOR))].sort().map(l => [l, l]), 'Todas');
     const pers = new Map(todas.map(f => [String(f.CEDULA), f.NOMBRE]));
@@ -537,13 +614,13 @@ const Dashboard = (() => {
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.toggle('on', x === b));
       [$('fDesde').value, $('fHasta').value] = rango(b.dataset.r); rangoAntes = null;
       limpiarPeriodo();
-      await traerServidor(); render();
+      cambiarRango();
     });
     ['fDesde', 'fHasta'].forEach(id => $(id).addEventListener('change', async () => {
       rangoAntes = null;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
       limpiarPeriodo();
-      await traerServidor(); render();
+      cambiarRango();
     }));
     ['fAnio', 'fMes', 'fSemana'].forEach(id => $(id).addEventListener('change', async () => {
       if (id !== 'fSemana') pintarSemanas();
@@ -552,18 +629,21 @@ const Dashboard = (() => {
       if (id !== 'fSemana') pintarSemanas();
       [$('fDesde').value, $('fHasta').value] = r;
       document.querySelectorAll('#rangeSeg button').forEach(x => x.classList.remove('on'));
-      await traerServidor(); render();
+      cambiarRango();
     }));
     ['fArea', 'fLider', 'fLabor', 'fPersona', 'fBloque', 'fLugar'].forEach(id => $(id).addEventListener('change', render));
     $('fabFiltros').addEventListener('click', () => abrirFiltros(true));
     // Tocar un indicador abre su detalle; tocar una barra filtra todas las gráficas (otra vez = quitar).
     $('view-dashboard').addEventListener('click', ev => {
       if (ev.target.closest('#dashFiltros')) return;
-      if (ev.target.closest('[data-kpi-cerrar]')) { kpiAbierto = ''; render(); return; }
+      // Abrir o cerrar un indicador solo cambia los indicadores, no todas las gráficas.
+      if (ev.target.closest('[data-kpi-cerrar]')) { kpiAbierto = ''; kpis(ultimas); return; }
       const k = ev.target.closest('[data-kpi]');
       if (k) {
         kpiAbierto = kpiAbierto === k.dataset.kpi ? '' : k.dataset.kpi;
-        render().then(() => { if (kpiAbierto && innerWidth < 900) $('kpiDetalle').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        medirAnchos();
+        kpis(ultimas);
+        if (kpiAbierto && innerWidth < 900) $('kpiDetalle').scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
       const f = ev.target.closest('[data-filtro]');
@@ -589,7 +669,7 @@ const Dashboard = (() => {
     $('filtrosListo').addEventListener('click', () => abrirFiltros(false));
     $('filtrosFondo').addEventListener('click', () => abrirFiltros(false));
     $('filtrosLimpiar').addEventListener('click', () => { FILTROS.forEach(([id]) => { $(id).value = ''; }); render(); });
-    $('dashRefresh').addEventListener('click', async () => { await traerServidor(); render(); });
+    $('dashRefresh').addEventListener('click', async () => { locales = null; combinadas = null; await cambiarRango({ forzar: true }); });
     let t;
     window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('view-dashboard').classList.contains('hidden')) render(); }, 250); });
     $('dashExport').addEventListener('click', () => {
@@ -601,13 +681,18 @@ const Dashboard = (() => {
 
   async function abrir(c) {
     ctx = c;
+    // Lo de este celular pudo cambiar desde la última vez: se vuelve a leer.
+    locales = null; combinadas = null;
+    borrados = new Set(await DB.getMeta('borrados', []));
     if (!enlazado) {
       enlazar();
       pintarPeriodo();
       [$('fDesde').value, $('fHasta').value] = rango('sem');
+      // Lo último que se trajo del servidor se muestra mientras llega lo nuevo.
+      const g = await DB.getMeta('dashCache', null);
+      if (g?.filas && !cache.has(g.clave)) cache.set(g.clave, g);
     }
-    await render();
-    traerServidor().then(render);
+    await cambiarRango();
   }
 
   return { abrir };

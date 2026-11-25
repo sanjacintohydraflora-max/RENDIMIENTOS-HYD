@@ -72,7 +72,10 @@ function doGet(e) {
     const p = e.parameter || {};
     if (!autorizado(p.key)) return responder({ ok: false, error: 'Clave incorrecta' });
     if (p.action === 'catalogos') return responder({ ok: true, version: VERSION, ...catalogos() });
-    if (p.action === 'filas') return responder({ ok: true, filas: filas(p.desde, p.hasta) });
+    if (p.action === 'filas') {
+      const r = filas(p.desde, p.hasta, p.formato);
+      return responder(p.formato === 'tabla' ? { ok: true, enc: r.enc, datos: r.datos } : { ok: true, filas: r });
+    }
     return responder({ ok: true, ping: new Date().toISOString() });
   } catch (err) {
     return responder({ ok: false, error: String(err && err.message || err) });
@@ -155,26 +158,31 @@ function guardar(registros, borrados) {
   return { reemplazadas: aBorrar.length, agregadas: nuevas.length };
 }
 
+let zona_ = null;
 function texto(v, col) {
   if (v instanceof Date) {
-    const tz = Session.getScriptTimeZone();
+    const tz = zona_ || (zona_ = Session.getScriptTimeZone());
     if (col === 'HRA INICIO' || col === 'HRA FIN') return Utilities.formatDate(v, tz, 'HH:mm');
     return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
   }
   return v;
 }
 
-function filas(desde, hasta) {
+function filas(desde, hasta, formato) {
   const t = leer('RENDIMIENTOS');
-  return t.datos
-    .map(fila => {
-      const o = {};
-      t.enc.forEach((c, i) => { o[c] = texto(fila[i], c); });
-      o.CEDULA = String(o.CEDULA);
-      o.LOTE = String(o.LOTE);
-      return o;
-    })
-    .filter(o => o['ID FILA'] !== '' && (!desde || String(o.FECHA) >= desde) && (!hasta || String(o.FECHA) <= hasta));
+  // Se filtra por fecha antes de convertir cada fila: con miles de filas históricas es lo que más tarda.
+  const iF = t.enc.indexOf('FECHA'), iId = t.enc.indexOf('ID FILA');
+  const datos = t.datos.filter(f => {
+    if (iId >= 0 && f[iId] === '') return false;
+    const d = String(texto(f[iF], 'FECHA'));
+    return (!desde || d >= desde) && (!hasta || d <= hasta);
+  }).map(f => t.enc.map((c, i) => {
+    const v = texto(f[i], c);
+    return c === 'CEDULA' || c === 'LOTE' ? String(v) : v;
+  }));
+  // En tabla (encabezados una vez y filas como listas) la respuesta pesa menos de la mitad.
+  if (formato === 'tabla') return { enc: t.enc, datos: datos };
+  return datos.map(f => { const o = {}; t.enc.forEach((c, i) => { o[c] = f[i]; }); return o; });
 }
 
 function catalogos() {

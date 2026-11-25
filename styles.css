@@ -417,3 +417,8 @@ button.kpi.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-so
 .area-chip { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
 .area-chip.on { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 .area-chip:disabled { cursor: default; background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+
+/* Mientras llega un rango nuevo del servidor, lo anterior se atenúa para no confundirlo con lo nuevo. */
+#view-dashboard.dash-cargando .kpis, #view-dashboard.dash-cargando .card { opacity: .45; transition: opacity .15s; }
+/* Las gráficas fuera de pantalla no se dibujan hasta acercarse a ellas: el dashboard responde más rápido en celular. */
+#view-dashboard .card:not(.sheet) { content-visibility: auto; contain-intrinsic-size: auto 420px; }

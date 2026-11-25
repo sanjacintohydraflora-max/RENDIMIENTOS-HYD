@@ -104,7 +104,9 @@ const Sync = (() => {
   }
 
   async function filas(desde, hasta) {
-    const data = await llamar({ action: 'filas', desde, hasta });
+    // El servidor nuevo responde en tabla (más liviano); el anterior, con una lista de objetos.
+    const data = await llamar({ action: 'filas', desde, hasta, formato: 'tabla' });
+    if (data.enc && data.datos) return data.datos.map(f => Object.fromEntries(data.enc.map((c, i) => [c, f[i]])));
     return data.filas || [];
   }
 
